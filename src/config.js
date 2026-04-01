@@ -1,0 +1,18 @@
+require('dotenv').config();
+
+module.exports = {
+  BOT_TOKEN: process.env.BOT_TOKEN || '',
+  ADMIN_ID: parseInt(process.env.ADMIN_ID || '0'),
+  CRYPTOBOT_TOKEN: process.env.CRYPTOBOT_TOKEN || '',
+  CARD_NUMBER: process.env.CARD_NUMBER || '',
+  CARD_HOLDER: process.env.CARD_HOLDER || '',
+  CARD_MONTHLY_PRICE: process.env.CARD_MONTHLY_PRICE || '2.50 BYN',
+  CARD_ETERNAL_PRICE: process.env.CARD_ETERNAL_PRICE || '7.50 BYN',
+  DB_PATH: process.env.DB_PATH || './data/bot.db',
+  PORT: parseInt(process.env.PORT || '3000'),
+  FREE_LIMIT_HOURS: 72,
+  PREMIUM_MONTHLY_STARS: 29,
+  PREMIUM_ETERNAL_STARS: 89,
+  CRYPTO_MONTHLY_USD: '1.50',
+  CRYPTO_ETERNAL_USD: '4.50',
+};
