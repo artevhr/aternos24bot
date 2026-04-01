@@ -2,48 +2,29 @@ const mineflayer = require('mineflayer');
 const db = require('./db');
 const config = require('./config');
 
-// Active bot instances: Map<userId (telegram_id), instance>
 const activeBots = new Map();
 
-// Supported Minecraft versions
 const MC_VERSIONS = [
-  '1.8.8',
-  '1.9.4',
-  '1.10.2',
-  '1.11.2',
-  '1.12.2',
-  '1.13.2',
-  '1.14.4',
-  '1.15.2',
-  '1.16.5',
-  '1.17.1',
-  '1.18.2',
-  '1.19.4',
-  '1.20.1',
-  '1.20.4',
-  '1.20.6',
-  '1.21.1',
-  '1.21.4',
-  '1.21.9',
-  '1.21.11',
-  '26.1',
+  '1.8.8','1.9.4','1.10.2','1.11.2','1.12.2',
+  '1.13.2','1.14.4','1.15.2','1.16.5','1.17.1',
+  '1.18.2','1.19.4','1.20.1','1.20.4','1.20.6',
+  '1.21.1','1.21.4','1.21.9','1.21.11','26.1',
 ];
 
-function getActiveBot(userId) {
-  return activeBots.get(userId) || null;
+function getActiveBot(userId) { return activeBots.get(userId) || null; }
+
+function friendlyError(msg) {
+  if (!msg) return 'Неизвестная ошибка';
+  if (msg.includes('ECONNRESET'))   return 'Сервер сбросил соединение.\n\n• Сервер offline или недоступен\n• Неверная версия Minecraft\n• Сервер требует лицензионный аккаунт (online-mode)';
+  if (msg.includes('ECONNREFUSED')) return 'Сервер отклонил подключение.\n\nПроверь IP и порт.';
+  if (msg.includes('ETIMEDOUT') || msg.includes('Таймаут')) return 'Сервер не ответил за 30 секунд.\n\nПроверь IP/порт или попробуй позже.';
+  if (msg.includes('ENOTFOUND'))    return 'Адрес сервера не найден.\n\nПроверь правильность домена/IP.';
+  if (msg.includes('This server is version')) return 'Несовпадение версий Minecraft.\n\nВыбери правильную версию при подключении.';
+  if (msg.toLowerCase().includes('connection closed')) return 'Соединение закрыто сервером.\n\nСервер может не принимать offline-mode ботов.';
+  return msg;
 }
 
-/**
- * Connect a Minecraft bot for a user.
- * @param {number} userId - Telegram user ID
- * @param {string} host
- * @param {number} port
- * @param {string} version
- * @param {number} botId - DB bot record ID
- * @param {Function} onEvent - callback(event, data)
- */
 async function connectBot(userId, host, port, version, botId, onEvent) {
-  // Disconnect any existing bot for this user
   await disconnectBot(userId);
 
   const botRecord = db.getBotById(botId);
@@ -51,61 +32,37 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let spawned  = false;
     let bot;
 
     try {
-      bot = mineflayer.createBot({
-        host: host,
-        port: parseInt(port),
-        username: username,
-        version: version,
-        auth: 'offline',
-        hideErrors: false,
-        checkTimeoutInterval: 30000,
-      });
-    } catch (e) {
-      return reject(e);
-    }
+      bot = mineflayer.createBot({ host, port: parseInt(port), username, version, auth: 'offline', hideErrors: true, checkTimeoutInterval: 30000 });
+    } catch (e) { return reject(new Error(friendlyError(e.message))); }
 
-    // Try to load pathfinder plugin for follow feature
     let pathfinderLoaded = false;
-    try {
-      const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-      bot.loadPlugin(pathfinder);
-      pathfinderLoaded = true;
-    } catch (e) {
-      // pathfinder optional
-    }
+    try { const { pathfinder } = require('mineflayer-pathfinder'); bot.loadPlugin(pathfinder); pathfinderLoaded = true; } catch {}
 
     const instance = {
-      bot,
-      botId,
-      userId,
-      pathfinderLoaded,
-      antiAfkInterval: null,
-      antiAfkEnabled: true,
-      chatBridgeEnabled: false,
-      actionLog: [],
-      followTarget: null,
-      followInterval: null,
-      opGranted: false,
-      waitingForOp: false,
-      freeLimitTimer: null,
+      bot, botId, userId, pathfinderLoaded,
+      antiAfkInterval: null, antiAfkEnabled: true,
+      chatBridgeEnabled: false, actionLog: [],
+      followTarget: null, followInterval: null,
+      opGranted: false, waitingForOp: false,
+      freeLimitTimer: null, reconnectTimer: null,
+      // stored for reconnect
+      _host: host, _port: port, _version: version, _onEvent: onEvent,
     };
-
     activeBots.set(userId, instance);
 
     const addLog = (msg) => {
-      const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      instance.actionLog.unshift(`[${time}] ${msg}`);
+      const t = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      instance.actionLog.unshift(`[${t}] ${msg}`);
       if (instance.actionLog.length > 60) instance.actionLog.pop();
     };
 
-    // ---- SPAWN ----
     bot.once('spawn', () => {
       if (settled) return;
-      settled = true;
-
+      settled = true; spawned = true;
       db.updateBotStatus(botId, 'connected');
       addLog('✅ Бот подключился к серверу');
       startAntiAfk(instance, addLog);
@@ -114,160 +71,169 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       onEvent('connected');
     });
 
-    // ---- DEATH ----
-    bot.on('death', () => {
-      addLog('💀 Бот умер, возрождается...');
-      onEvent('death');
-    });
+    bot.on('death', () => { addLog('💀 Бот умер, возрождается...'); onEvent('death'); });
 
-    // ---- KICKED ----
     bot.on('kicked', (reason) => {
-      let reasonStr = '';
-      try { reasonStr = JSON.parse(reason)?.text || reason; } catch { reasonStr = String(reason); }
-      addLog(`⛔ Бот кикнут: ${reasonStr}`);
-      onEvent('kicked', reasonStr);
-      _cleanup(userId);
+      let r = ''; try { r = JSON.parse(reason)?.text || reason; } catch { r = String(reason); }
+      addLog(`⛔ Бот кикнут: ${r}`);
+      onEvent('kicked', r);
+      _scheduleReconnect(userId, instance, addLog);
     });
 
-    // ---- ERROR ----
     bot.on('error', (err) => {
+      const friendly = friendlyError(err.message);
       addLog(`⚠️ Ошибка: ${err.message}`);
       if (!settled) {
         settled = true;
-        reject(err);
         activeBots.delete(userId);
-      } else {
-        onEvent('error', err.message);
-        _cleanup(userId);
+        try { db.updateBotStatus(botId, 'disconnected'); } catch {}
+        reject(new Error(friendly));
+      } else if (spawned) {
+        onEvent('error', friendly);
+        _scheduleReconnect(userId, instance, addLog);
       }
     });
 
-    // ---- END ----
     bot.on('end', (reason) => {
-      addLog(`🔌 Соединение закрыто${reason ? ': ' + reason : ''}`);
       if (!settled) {
         settled = true;
-        reject(new Error(reason || 'Connection closed'));
         activeBots.delete(userId);
-      } else {
+        try { db.updateBotStatus(botId, 'disconnected'); } catch {}
+        reject(new Error(friendlyError(reason || 'Соединение закрыто сервером')));
+      } else if (spawned) {
+        addLog(`🔌 Соединение закрыто${reason ? ': ' + reason : ''}`);
         onEvent('disconnected');
-        _cleanup(userId);
+        _scheduleReconnect(userId, instance, addLog);
       }
     });
 
-    // ---- CHAT ----
     bot.on('chat', (playerName, message) => {
       addLog(`💬 <${playerName}> ${message}`);
-      if (instance.chatBridgeEnabled) {
-        onEvent('chat', { playerName, message });
-      }
+      if (instance.chatBridgeEnabled) onEvent('chat', { playerName, message });
     });
 
-    // ---- MESSAGES (detect OP) ----
     bot.on('message', (jsonMsg) => {
       const msg = jsonMsg.toString();
-      // Detect OP grant messages
-      if (
+      if (!instance.opGranted && (
         (msg.toLowerCase().includes('made') && msg.toLowerCase().includes('operator')) ||
         msg.toLowerCase().includes('[op]') ||
         (msg.toLowerCase().includes(username.toLowerCase()) && msg.toLowerCase().includes('op'))
-      ) {
-        if (!instance.opGranted) {
-          instance.opGranted = true;
-          addLog('👑 Получены права оператора!');
-          onEvent('op_granted');
-        }
+      )) {
+        instance.opGranted = true;
+        addLog('👑 Получены права оператора!');
+        onEvent('op_granted');
       }
     });
 
-    // Connection timeout (30 sec)
     setTimeout(() => {
       if (!settled) {
         settled = true;
         try { bot.quit(); } catch {}
         activeBots.delete(userId);
-        reject(new Error('Таймаут подключения (30 сек)'));
+        try { db.updateBotStatus(botId, 'disconnected'); } catch {}
+        reject(new Error('Таймаут подключения (30 сек).\n\nСервер не ответил. Проверь IP/порт.'));
       }
     }, 30000);
   });
 }
 
-// ===== ANTI-AFK =====
+// ─── Авто-реконнект ───────────────────────────────────────────────────────────
+function _scheduleReconnect(userId, instance, addLog) {
+  _cleanupTimers(instance);
+  db.updateBotStatus(instance.botId, 'disconnected');
+  activeBots.delete(userId);
+
+  const delayMin = config.AUTO_RECONNECT_MINUTES;
+  addLog(`🔄 Авто-реконнект через ${delayMin} мин...`);
+  instance._onEvent('reconnecting', delayMin);
+
+  instance.reconnectTimer = setTimeout(async () => {
+    // Проверяем что пользователь не подключил бота вручную
+    if (activeBots.has(userId)) return;
+
+    // Создаём новую запись бота в БД
+    const user = db.getUserByInternalId(db.getBotById(instance.botId)?.user_id || 0) || {};
+    const botRecord = db.getBotById(instance.botId);
+    if (!botRecord) return;
+
+    const newBotId = db.createBot(
+      botRecord.user_id,
+      db.getNextBotNumber(),
+      instance._host,
+      instance._port,
+      instance._version
+    );
+
+    addLog(`🔄 Переподключаюсь к ${instance._host}:${instance._port}...`);
+    try {
+      await connectBot(userId, instance._host, instance._port, instance._version, newBotId, instance._onEvent);
+      instance._onEvent('reconnected');
+    } catch (e) {
+      instance._onEvent('reconnect_failed', e.message);
+    }
+  }, delayMin * 60 * 1000);
+}
+
+// ─── Anti-AFK ─────────────────────────────────────────────────────────────────
 function startAntiAfk(instance, addLog) {
   if (instance.antiAfkInterval) clearInterval(instance.antiAfkInterval);
-
   instance.antiAfkInterval = setInterval(() => {
-    if (!instance.bot || !instance.bot.entity || !instance.antiAfkEnabled) return;
-    if (instance.followTarget) return; // don't interfere with follow
-
+    if (!instance.bot?.entity || !instance.antiAfkEnabled || instance.followTarget) return;
     try {
       const roll = Math.random();
       if (roll < 0.4) {
-        // Walk randomly
-        const dir = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        const dir = ['forward','back','left','right'][Math.floor(Math.random()*4)];
         instance.bot.setControlState(dir, true);
-        setTimeout(() => {
-          if (instance.bot) instance.bot.setControlState(dir, false);
-        }, 400 + Math.random() * 600);
+        setTimeout(() => { if (instance.bot) instance.bot.setControlState(dir, false); }, 400 + Math.random()*600);
       } else if (roll < 0.65) {
-        // Jump
         instance.bot.setControlState('jump', true);
-        setTimeout(() => {
-          if (instance.bot) instance.bot.setControlState('jump', false);
-        }, 250);
+        setTimeout(() => { if (instance.bot) instance.bot.setControlState('jump', false); }, 250);
       } else {
-        // Look around
-        const yaw = (Math.random() * 2 - 1) * Math.PI;
-        const pitch = (Math.random() * 2 - 1) * 0.4;
-        instance.bot.look(yaw, pitch, false).catch(() => {});
+        instance.bot.look((Math.random()*2-1)*Math.PI, (Math.random()*2-1)*0.4, false).catch(()=>{});
       }
     } catch {}
-  }, 12000 + Math.random() * 8000);
+  }, 12000 + Math.random()*8000);
 }
 
-// ===== 72H FREE TIMER =====
+// ─── Free 7-day timer ─────────────────────────────────────────────────────────
 function startFreeTimer(userId, instance, onEvent, addLog) {
   if (instance.freeLimitTimer) clearInterval(instance.freeLimitTimer);
-
   instance.freeLimitTimer = setInterval(() => {
     const inst = activeBots.get(userId);
     if (!inst) return clearInterval(instance.freeLimitTimer);
-
-    const botRecord = db.getBotById(inst.botId);
-    if (!botRecord) return;
-
-    const user = db.getUserByInternalId(botRecord.user_id);
-    if (!user) return;
-
-    const premium = isPremiumUser(user);
-    if (premium) {
-      // Premium user — no limit, stop checking
-      clearInterval(instance.freeLimitTimer);
-      return;
-    }
-
-    const hoursOnline = (Math.floor(Date.now() / 1000) - botRecord.connected_at) / 3600;
+    const rec = db.getBotById(inst.botId);
+    if (!rec) return;
+    const user = db.getUserByInternalId(rec.user_id);
+    if (isPremiumUser(user)) { clearInterval(instance.freeLimitTimer); return; }
+    const hoursOnline = (Math.floor(Date.now()/1000) - rec.connected_at) / 3600;
     if (hoursOnline >= config.FREE_LIMIT_HOURS) {
       clearInterval(instance.freeLimitTimer);
-      addLog('⏰ Лимит 72 часов истёк, отключаюсь...');
+      addLog('⏰ Лимит 7 дней истёк, отключаюсь...');
       onEvent('free_limit');
-      disconnectBot(userId).catch(() => {});
+      disconnectBot(userId).catch(()=>{});
     }
-  }, 60 * 1000); // check every minute
+  }, 60000);
 }
 
 function isPremiumUser(user) {
   if (!user) return false;
   if (user.premium_type === 'eternal') return true;
-  if (user.premium_type === 'monthly' && user.premium_expires > Math.floor(Date.now() / 1000)) return true;
+  if (user.premium_type === 'monthly' && user.premium_expires > Math.floor(Date.now()/1000)) return true;
   return false;
 }
 
-// ===== DISCONNECT =====
+function _cleanupTimers(instance) {
+  if (instance.antiAfkInterval) clearInterval(instance.antiAfkInterval);
+  if (instance.followInterval)  clearInterval(instance.followInterval);
+  if (instance.freeLimitTimer)  clearInterval(instance.freeLimitTimer);
+  if (instance.reconnectTimer)  clearTimeout(instance.reconnectTimer);
+}
+
 async function disconnectBot(userId) {
   const inst = activeBots.get(userId);
   if (!inst) return;
-
+  // Cancel pending reconnect
+  if (inst.reconnectTimer) { clearTimeout(inst.reconnectTimer); inst.reconnectTimer = null; }
   try { inst.bot.quit(); } catch {}
   _cleanup(userId);
 }
@@ -275,67 +241,63 @@ async function disconnectBot(userId) {
 function _cleanup(userId) {
   const inst = activeBots.get(userId);
   if (!inst) return;
-
-  if (inst.antiAfkInterval) clearInterval(inst.antiAfkInterval);
-  if (inst.followInterval) clearInterval(inst.followInterval);
-  if (inst.freeLimitTimer) clearInterval(inst.freeLimitTimer);
-
+  _cleanupTimers(inst);
   try { db.updateBotStatus(inst.botId, 'disconnected'); } catch {}
   activeBots.delete(userId);
 }
 
-// ===== STATS =====
 function getBotStats(userId) {
   const inst = activeBots.get(userId);
-  if (!inst || !inst.bot) return null;
-
+  if (!inst?.bot) return null;
   const bot = inst.bot;
-  const botRecord = db.getBotById(inst.botId);
-
+  const rec = db.getBotById(inst.botId);
   try {
-    const health = Math.round((bot.health || 0) * 10) / 10;
-    const food = Math.round(bot.food || 0);
-    const gamemodeMap = { 0: 'Выживание', 1: 'Креатив', 2: 'Приключение', 3: 'Наблюдатель' };
-    const gamemode = gamemodeMap[bot.game?.gameMode] || 'Неизвестно';
-
-    const timeOfDay = bot.time?.timeOfDay ?? 0;
-    const isDay = timeOfDay >= 0 && timeOfDay < 13000;
-    const worldTime = isDay ? '☀️ День' : '🌙 Ночь';
-
-    const onlineCount = Object.keys(bot.players || {}).length;
-
-    const connectedAt = botRecord?.connected_at || Math.floor(Date.now() / 1000);
-    const uptimeSec = Math.max(0, Math.floor(Date.now() / 1000) - connectedAt);
-    const uptimeH = Math.floor(uptimeSec / 3600);
-    const uptimeM = Math.floor((uptimeSec % 3600) / 60);
-
+    const gamemodeMap = {0:'Выживание',1:'Креатив',2:'Приключение',3:'Наблюдатель'};
+    const tod = bot.time?.timeOfDay ?? 0;
+    const connectedAt = rec?.connected_at || Math.floor(Date.now()/1000);
+    const upSec = Math.max(0, Math.floor(Date.now()/1000) - connectedAt);
+    // Total historical + current session
+    const historicalSec = rec?.total_online_seconds || 0;
+    const totalSec = historicalSec + upSec;
     return {
-      username: bot.username,
-      server: `${botRecord?.server_host}:${botRecord?.server_port}`,
-      version: bot.version || botRecord?.mc_version,
-      health,
-      food,
-      gamemode,
-      worldTime,
-      onlineCount,
-      uptimeH,
-      uptimeM,
-      opGranted: inst.opGranted,
+      username:    bot.username,
+      server:      `${rec?.server_host}:${rec?.server_port}`,
+      version:     bot.version || rec?.mc_version,
+      health:      Math.round((bot.health||0)*10)/10,
+      food:        Math.round(bot.food||0),
+      gamemode:    gamemodeMap[bot.game?.gameMode] || 'Неизвестно',
+      worldTime:   (tod >= 0 && tod < 13000) ? '☀️ День' : '🌙 Ночь',
+      onlineCount: Object.keys(bot.players||{}).length,
+      uptimeH:     Math.floor(upSec/3600),
+      uptimeM:     Math.floor((upSec%3600)/60),
+      totalH:      Math.floor(totalSec/3600),
+      totalM:      Math.floor((totalSec%3600)/60),
+      opGranted:   inst.opGranted,
       waitingForOp: inst.waitingForOp,
       antiAfkEnabled: inst.antiAfkEnabled,
       followTarget: inst.followTarget,
       chatBridgeEnabled: inst.chatBridgeEnabled,
     };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// ===== CONTROLS =====
+function getInventory(userId) {
+  const inst = activeBots.get(userId);
+  if (!inst?.bot) return null;
+  try {
+    const items = inst.bot.inventory.items();
+    return items.map(item => ({
+      name: item.name,
+      displayName: item.displayName || item.name,
+      count: item.count,
+      slot: item.slot,
+    }));
+  } catch { return null; }
+}
+
 function toggleAntiAfk(userId) {
   const inst = activeBots.get(userId);
   if (!inst) return null;
-
   inst.antiAfkEnabled = !inst.antiAfkEnabled;
   return inst.antiAfkEnabled;
 }
@@ -343,89 +305,50 @@ function toggleAntiAfk(userId) {
 function moveBot(userId, direction) {
   const inst = activeBots.get(userId);
   if (!inst?.bot) return false;
-
-  const validDirs = { forward: true, back: true, left: true, right: true, jump: true, sneak: true };
-  if (!validDirs[direction]) return false;
-
+  if (!['forward','back','left','right','jump','sneak'].includes(direction)) return false;
   try {
     inst.bot.setControlState(direction, true);
-    setTimeout(() => {
-      if (inst.bot) inst.bot.setControlState(direction, false);
-    }, 500);
+    setTimeout(() => { if (inst.bot) inst.bot.setControlState(direction, false); }, 500);
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 async function followPlayer(userId, playerName) {
   const inst = activeBots.get(userId);
-  if (!inst?.bot) return false;
-  if (!inst.pathfinderLoaded) return false;
-
+  if (!inst?.bot || !inst.pathfinderLoaded) return false;
   try {
     const { Movements, goals } = require('mineflayer-pathfinder');
     const mcData = require('minecraft-data')(inst.bot.version);
-    const movements = new Movements(inst.bot, mcData);
-    inst.bot.pathfinder.setMovements(movements);
-
-    // Stop previous follow
-    if (inst.followInterval) {
-      clearInterval(inst.followInterval);
-      inst.followInterval = null;
-    }
-
+    inst.bot.pathfinder.setMovements(new Movements(inst.bot, mcData));
+    if (inst.followInterval) { clearInterval(inst.followInterval); inst.followInterval = null; }
     inst.followTarget = playerName;
     inst.followInterval = setInterval(() => {
       if (!inst.bot?.entity) return;
       const target = inst.bot.players[playerName]?.entity;
-      if (target) {
-        const { GoalFollow } = goals;
-        inst.bot.pathfinder.setGoal(new GoalFollow(target, 2), true);
-      }
+      if (target) inst.bot.pathfinder.setGoal(new goals.GoalFollow(target, 2), true);
     }, 1000);
-
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 function stopFollow(userId) {
   const inst = activeBots.get(userId);
   if (!inst) return;
-
-  if (inst.followInterval) {
-    clearInterval(inst.followInterval);
-    inst.followInterval = null;
-  }
+  if (inst.followInterval) { clearInterval(inst.followInterval); inst.followInterval = null; }
   inst.followTarget = null;
-
-  try {
-    if (inst.pathfinderLoaded) inst.bot.pathfinder.setGoal(null);
-  } catch {}
+  try { if (inst.pathfinderLoaded) inst.bot.pathfinder.setGoal(null); } catch {}
 }
 
 async function setCreative(userId) {
   const inst = activeBots.get(userId);
   if (!inst?.bot) return false;
-  try {
-    inst.bot.chat('/gamemode creative');
-    return true;
-  } catch {
-    return false;
-  }
+  try { inst.bot.chat('/gamemode creative'); return true; } catch { return false; }
 }
 
 function sendChatToMC(userId, message) {
   const inst = activeBots.get(userId);
   if (!inst?.bot) return false;
-  try {
-    inst.bot.chat(message);
-    return true;
-  } catch {
-    return false;
-  }
+  try { inst.bot.chat(message); return true; } catch { return false; }
 }
 
 function toggleChatBridge(userId) {
@@ -435,23 +358,12 @@ function toggleChatBridge(userId) {
   return inst.chatBridgeEnabled;
 }
 
-function getActionLog(userId) {
-  return activeBots.get(userId)?.actionLog || [];
-}
+function getActionLog(userId) { return activeBots.get(userId)?.actionLog || []; }
 
 module.exports = {
-  MC_VERSIONS,
-  getActiveBot,
-  connectBot,
-  disconnectBot,
-  getBotStats,
-  toggleAntiAfk,
-  moveBot,
-  followPlayer,
-  stopFollow,
-  setCreative,
-  sendChatToMC,
-  toggleChatBridge,
-  getActionLog,
+  MC_VERSIONS, getActiveBot, connectBot, disconnectBot,
+  getBotStats, getInventory, toggleAntiAfk, moveBot,
+  followPlayer, stopFollow, setCreative, sendChatToMC,
+  toggleChatBridge, getActionLog,
   getAllActiveBots: () => [...activeBots.values()],
 };
