@@ -1,118 +1,137 @@
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 const config = require('./config');
 
-// Ensure data directory exists
-const dbDir = path.dirname(path.resolve(config.DB_PATH));
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const DB_PATH = path.resolve(config.DB_PATH);
+const DB_DIR = path.dirname(DB_PATH);
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
-const db = new Database(config.DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+let db;
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id INTEGER UNIQUE NOT NULL,
-    username TEXT,
-    premium_type TEXT DEFAULT 'free',
-    premium_expires INTEGER,
-    created_at INTEGER DEFAULT (unixepoch())
-  );
+const ready = initSqlJs().then((SQL) => {
+  if (fs.existsSync(DB_PATH)) {
+    db = new SQL.Database(fs.readFileSync(DB_PATH));
+  } else {
+    db = new SQL.Database();
+  }
 
-  CREATE TABLE IF NOT EXISTS bots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    bot_number INTEGER NOT NULL,
-    server_host TEXT NOT NULL,
-    server_port INTEGER DEFAULT 25565,
-    mc_version TEXT NOT NULL,
-    mc_username TEXT NOT NULL,
-    status TEXT DEFAULT 'disconnected',
-    connected_at INTEGER,
-    disconnected_at INTEGER,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
+  db.run(`PRAGMA foreign_keys = ON;`);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER UNIQUE NOT NULL,
+      username TEXT,
+      premium_type TEXT DEFAULT 'free',
+      premium_expires INTEGER,
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
+    CREATE TABLE IF NOT EXISTS bots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      bot_number INTEGER NOT NULL,
+      server_host TEXT NOT NULL,
+      server_port INTEGER DEFAULT 25565,
+      mc_version TEXT NOT NULL,
+      mc_username TEXT NOT NULL,
+      status TEXT DEFAULT 'disconnected',
+      connected_at INTEGER,
+      disconnected_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      telegram_id INTEGER NOT NULL,
+      payment_type TEXT NOT NULL,
+      method TEXT NOT NULL,
+      amount TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
+    CREATE TABLE IF NOT EXISTS bot_counter (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      count INTEGER DEFAULT 0
+    );
+    INSERT OR IGNORE INTO bot_counter VALUES (1, 0);
+  `);
 
-  CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    telegram_id INTEGER NOT NULL,
-    payment_type TEXT NOT NULL,
-    method TEXT NOT NULL,
-    amount TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at INTEGER DEFAULT (unixepoch()),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
+  persist();
+  setInterval(persist, 30000);
+});
 
-  CREATE TABLE IF NOT EXISTS bot_counter (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    count INTEGER DEFAULT 0
-  );
+function persist() {
+  if (!db) return;
+  try {
+    fs.writeFileSync(DB_PATH, Buffer.from(db.export()));
+  } catch (e) {
+    console.error('DB persist error:', e.message);
+  }
+}
 
-  INSERT OR IGNORE INTO bot_counter VALUES (1, 0);
-`);
+function get(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  if (stmt.step()) { const r = stmt.getAsObject(); stmt.free(); return r; }
+  stmt.free();
+  return undefined;
+}
+
+function all(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+}
+
+function run(sql, params = []) {
+  db.run(sql, params);
+  const r = get('SELECT last_insert_rowid() as id');
+  persist();
+  return r ? r.id : null;
+}
 
 module.exports = {
-  // ===== USERS =====
-  getUser: (telegramId) =>
-    db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId),
-
-  getUserByInternalId: (id) =>
-    db.prepare('SELECT * FROM users WHERE id = ?').get(id),
-
-  createUser: (telegramId, username) => {
-    db.prepare('INSERT OR IGNORE INTO users (telegram_id, username) VALUES (?, ?)').run(telegramId, username || '');
-    return db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
+  ready,
+  getUser: (tid) => get('SELECT * FROM users WHERE telegram_id = ?', [tid]),
+  getUserByInternalId: (id) => get('SELECT * FROM users WHERE id = ?', [id]),
+  createUser: (tid, username) => {
+    run('INSERT OR IGNORE INTO users (telegram_id, username) VALUES (?, ?)', [tid, username || '']);
+    return get('SELECT * FROM users WHERE telegram_id = ?', [tid]);
   },
-
-  updateUserPremium: (telegramId, type, expires) =>
-    db.prepare('UPDATE users SET premium_type = ?, premium_expires = ? WHERE telegram_id = ?').run(type, expires, telegramId),
-
-  getAllUsers: () =>
-    db.prepare('SELECT * FROM users ORDER BY created_at DESC').all(),
-
-  // ===== BOTS =====
+  updateUserPremium: (tid, type, expires) =>
+    run('UPDATE users SET premium_type = ?, premium_expires = ? WHERE telegram_id = ?', [type, expires, tid]),
+  getAllUsers: () => all('SELECT * FROM users ORDER BY created_at DESC'),
   getNextBotNumber: () => {
-    db.prepare('UPDATE bot_counter SET count = count + 1 WHERE id = 1').run();
-    return db.prepare('SELECT count FROM bot_counter WHERE id = 1').get().count;
+    db.run('UPDATE bot_counter SET count = count + 1 WHERE id = 1');
+    const r = get('SELECT count FROM bot_counter WHERE id = 1');
+    persist();
+    return r ? r.count : 1;
   },
-
-  createBot: (userId, botNumber, host, port, version) => {
-    const username = `whminebot-${botNumber}`;
-    return db.prepare(
-      'INSERT INTO bots (user_id, bot_number, server_host, server_port, mc_version, mc_username) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(userId, botNumber, host, port, version, username).lastInsertRowid;
-  },
-
+  createBot: (userId, botNumber, host, port, version) =>
+    run(
+      'INSERT INTO bots (user_id, bot_number, server_host, server_port, mc_version, mc_username) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, botNumber, host, port, version, `whminebot-${botNumber}`]
+    ),
   getActiveBot: (userId) =>
-    db.prepare("SELECT * FROM bots WHERE user_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1").get(userId),
-
-  getBotById: (id) =>
-    db.prepare('SELECT * FROM bots WHERE id = ?').get(id),
-
+    get("SELECT * FROM bots WHERE user_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1", [userId]),
+  getBotById: (id) => get('SELECT * FROM bots WHERE id = ?', [id]),
   updateBotStatus: (id, status) => {
     const now = Math.floor(Date.now() / 1000);
     if (status === 'connected') {
-      db.prepare('UPDATE bots SET status = ?, connected_at = ? WHERE id = ?').run(status, now, id);
+      run('UPDATE bots SET status = ?, connected_at = ? WHERE id = ?', [status, now, id]);
     } else {
-      db.prepare('UPDATE bots SET status = ?, disconnected_at = ? WHERE id = ?').run(status, now, id);
+      run('UPDATE bots SET status = ?, disconnected_at = ? WHERE id = ?', [status, now, id]);
     }
   },
-
   getAllActiveBots: () =>
-    db.prepare("SELECT b.*, u.telegram_id FROM bots b JOIN users u ON b.user_id = u.id WHERE b.status = 'connected'").all(),
-
-  // ===== PAYMENTS =====
-  createPayment: (userId, telegramId, type, method, amount) =>
-    db.prepare('INSERT INTO payments (user_id, telegram_id, payment_type, method, amount) VALUES (?, ?, ?, ?, ?)')
-      .run(userId, telegramId, type, method, amount).lastInsertRowid,
-
-  updatePayment: (id, status) =>
-    db.prepare('UPDATE payments SET status = ? WHERE id = ?').run(status, id),
-
+    all("SELECT b.*, u.telegram_id FROM bots b JOIN users u ON b.user_id = u.id WHERE b.status = 'connected'"),
+  createPayment: (userId, tid, type, method, amount) =>
+    run('INSERT INTO payments (user_id, telegram_id, payment_type, method, amount) VALUES (?, ?, ?, ?, ?)',
+      [userId, tid, type, method, amount]),
+  updatePayment: (id, status) => run('UPDATE payments SET status = ? WHERE id = ?', [status, id]),
   getPendingPayments: () =>
-    db.prepare("SELECT p.*, u.username FROM payments p JOIN users u ON p.user_id = u.id WHERE p.status = 'pending' ORDER BY p.created_at DESC").all(),
+    all("SELECT p.*, u.username FROM payments p JOIN users u ON p.user_id = u.id WHERE p.status = 'pending' ORDER BY p.created_at DESC"),
+  persist,
 };
