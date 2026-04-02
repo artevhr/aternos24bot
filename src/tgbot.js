@@ -826,3 +826,40 @@ bot.action(/^keep_bot_(\d+)$/, async (ctx) => {
     { parse_mode:'Markdown', reply_markup: { inline_keyboard: [[{ text:'💎 Продлить Premium', callback_data:'tariff' }]] } }
   );
 });
+
+// ─── Toggle auto-reconnect ────────────────────────────────────────────────────
+bot.action(/^toggle_reconnect_(\d+)$/, async (ctx) => {
+  const botId = parseInt(ctx.match[1]);
+  const result = mc.toggleAutoReconnect(botId);
+  await ctx.answerCbQuery(
+    result === null ? '❌ Бот не подключён' :
+    result ? '🔄 Авто-реконнект включён' : '⏸ Авто-реконнект выключен'
+  );
+  if (result !== null) {
+    const stats = mc.getBotStats(botId);
+    const user = db.getUser(ctx.from.id);
+    if (stats) await ctx.editMessageText(
+      formatStats(stats, user),
+      { parse_mode:'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) }
+    );
+  }
+});
+
+// ─── Toggle no-ads (Premium only) ────────────────────────────────────────────
+bot.action(/^toggle_ads_(\d+)$/, async (ctx) => {
+  const botId = parseInt(ctx.match[1]);
+  const user = db.getUser(ctx.from.id);
+  if (!isPremium(user)) return ctx.answerCbQuery('⚠️ Только для Premium!', { show_alert: true });
+  const result = mc.toggleNoAds(botId);
+  await ctx.answerCbQuery(
+    result === null ? '❌' :
+    result ? '🔇 Реклама отключена для этого бота' : '📢 Реклама включена'
+  );
+  if (result !== null) {
+    const stats = mc.getBotStats(botId);
+    if (stats) await ctx.editMessageText(
+      formatStats(stats, user),
+      { parse_mode:'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) }
+    );
+  }
+});

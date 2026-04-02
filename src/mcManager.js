@@ -57,6 +57,8 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       opGranted: false, waitingForOp: false,
       freeLimitTimer: null, reconnectTimer: null,
       gracePeriodTimer: null,
+      autoReconnect: true,
+      noAds: false,
       _host: host, _port: port, _version: version, _onEvent: onEvent,
     };
     activeBots.set(botId, instance);
@@ -144,6 +146,12 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
 }
 
 function _scheduleReconnect(botId, instance, addLog) {
+  if (!instance.autoReconnect) {
+    _cleanupTimers(instance);
+    activeBots.delete(botId);
+    try { db.updateBotStatus(botId, 'disconnected'); } catch {}
+    return;
+  }
   _cleanupTimers(instance);
   activeBots.delete(botId);
   try { db.updateBotStatus(botId, 'disconnected'); } catch {}
@@ -227,7 +235,9 @@ async function disconnectBot(userId) {
 }
 
 async function disconnectBotById(botId) {
+  // Mark as manual so end/error events don't trigger reconnect
   const inst = activeBots.get(botId);
+  if (inst) inst.autoReconnect = false;
   if (!inst) return;
   if (inst.reconnectTimer) { clearTimeout(inst.reconnectTimer); inst.reconnectTimer = null; }
   try { inst.bot.quit(); } catch {}
@@ -262,6 +272,8 @@ function getBotStats(botId) {
       antiAfkEnabled: inst.antiAfkEnabled,
       followTarget: inst.followTarget,
       chatBridgeEnabled: inst.chatBridgeEnabled,
+      autoReconnect: inst.autoReconnect,
+      noAds: inst.noAds,
     };
   } catch { return null; }
 }
@@ -357,8 +369,10 @@ function getActionLog(botId) { return activeBots.get(botId)?.actionLog || []; }
 
 // Send MC chat message from all active bots (admin broadcast)
 async function sendToAllBots(message) {
+  // skip bots where noAds is enabled
   let count = 0;
   for (const [, inst] of activeBots) {
+    if (inst.noAds) continue;
     try { inst.bot.chat(message); count++; } catch {}
     await new Promise(r => setTimeout(r, 100));
   }
@@ -373,4 +387,22 @@ module.exports = {
   toggleAntiAfk, moveBot, followPlayer, stopFollow,
   setCreative, sendChatToMC, toggleChatBridge,
   getActionLog, sendToAllBots,
+  toggleAutoReconnect, toggleNoAds,
 };
+
+// toggle auto-reconnect for a bot
+function toggleAutoReconnect(botId) {
+  const inst = activeBots.get(botId);
+  if (!inst) return null;
+  inst.autoReconnect = !inst.autoReconnect;
+  return inst.autoReconnect;
+}
+
+// toggle no-ads for a bot
+function toggleNoAds(botId) {
+  const inst = activeBots.get(botId);
+  if (!inst) return null;
+  inst.noAds = !inst.noAds;
+  return inst.noAds;
+}
+

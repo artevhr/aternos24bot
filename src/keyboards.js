@@ -24,7 +24,8 @@ const botListKeyboard = (bots) => {
 };
 
 const panelKeyboard = (stats, isPremium, botId) => {
-  const afkLabel = stats.antiAfkEnabled ? '🟢 Анти-АФК: ВКЛ' : '🔴 Анти-АФК: ВЫКЛ';
+  const afkLabel     = stats.antiAfkEnabled ? '🟢 Анти-АФК: ВКЛ'   : '🔴 Анти-АФК: ВЫКЛ';
+  const reconnLabel  = stats.autoReconnect  ? '🔄 Авто-реконн: ВКЛ' : '⏸ Авто-реконн: ВЫКЛ';
   let opLabel, opAction;
   if (stats.opGranted) { opLabel = '👑 ОП: есть'; opAction = `op_already_${botId}`; }
   else if (stats.waitingForOp) { opLabel = '✅ ОП выдан — Креатив'; opAction = `op_granted_${botId}`; }
@@ -32,12 +33,14 @@ const panelKeyboard = (stats, isPremium, botId) => {
 
   const rows = [
     [Markup.button.callback('🔄 Обновить', `bot_panel_${botId}`)],
-    [Markup.button.callback(afkLabel, `toggle_afk_${botId}`)],
+    [Markup.button.callback(afkLabel, `toggle_afk_${botId}`), Markup.button.callback(reconnLabel, `toggle_reconnect_${botId}`)],
     [Markup.button.callback(opLabel, opAction)],
   ];
   if (isPremium) {
     rows.push([Markup.button.callback('🕹️ Движение', `movement_${botId}`), Markup.button.callback('🎒 Инвентарь', `inventory_${botId}`)]);
     rows.push([Markup.button.callback('💬 Чат-мост', `chatbridge_${botId}`), Markup.button.callback('📜 Лог', `action_log_${botId}`)]);
+    const adsLabel = stats.noAds ? '🔇 Реклама: ВЫКЛ' : '📢 Реклама: ВКЛ';
+    rows.push([Markup.button.callback(adsLabel, `toggle_ads_${botId}`)]);
   }
   rows.push([Markup.button.callback('🔴 Отключить', `disconnect_${botId}`)]);
   rows.push([Markup.button.callback('◀️ Мои боты', 'my_bots')]);
