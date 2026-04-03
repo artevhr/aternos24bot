@@ -1,4 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
+const { esc, code } = require('./escape');
 const config = require('./config');
 const db = require('./db');
 const mc = require('./mcManager');
@@ -384,12 +385,12 @@ async function doConnect(ctx, host, port, version) {
   // Show nick BEFORE connecting — user needs to whitelist it
   setState(userId, { step: 'pre_connect', host, port, version, mcUsername });
   await ctx.editMessageText(
-    `🤖 *Готов к подключению*\n\n` +
-    `🌐 Сервер: \`${host}:${port}\`\n` +
-    `📦 Версия: ${version}\n` +
-    `👤 Ник бота: \`${mcUsername}\`\n\n` +
-    `⚠️ *Если на сервере есть whitelist — добавь этот ник перед подключением!*\n\n` +
-    `Нажми «Подключить» когда будешь готов:`,
+    '🤖 *Готов к подключению*\n\n' +
+    '🌐 Сервер: ' + code(host + ':' + port) + '\n' +
+    '📦 Версия: ' + esc(version) + '\n' +
+    '👤 Ник бота: ' + code(mcUsername) + '\n\n' +
+    '⚠️ *Если на сервере есть whitelist — добавь этот ник перед подключением!*\n\n' +
+    'Нажми «Подключить» когда будешь готов:',
     {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -407,7 +408,7 @@ async function doConnectNow(ctx) {
   clearState(userId);
 
   const user = db.getUser(userId);
-  await ctx.editMessageText(`⏳ Подключаюсь...\n\n🌐 \`${host}:${port}\`\n📦 Версия: ${version}\n👤 Ник: \`${mcUsername}\``, { parse_mode:'Markdown' });
+  await ctx.editMessageText('⏳ Подключаюсь...\n\n🌐 ' + code(host + ':' + port) + '\n📦 Версия: ' + esc(version) + '\n👤 Ник: ' + code(mcUsername), { parse_mode:'Markdown' });
 
   const botNumber = db.getNextBotNumber();
   const botId = db.createBot(user.id, botNumber, host, port, version, mcUsername);
@@ -877,11 +878,11 @@ bot.action('change_nick', async (ctx) => {
   }
   await ctx.answerCbQuery();
   const current = user.custom_bot_nick
-    ? `Текущий ник: \`${user.custom_bot_nick}\``
-    : 'Ник не задан — используется стандартный \`whminebot-N\`';
+    ? 'Текущий ник: ' + code(user.custom_bot_nick)
+    : 'Ник не задан — используется стандартный ' + code('whminebot-N');
   setState(ctx.from.id, { step: 'set_custom_nick' });
   await ctx.editMessageText(
-    `✏️ *Смена ника бота*\n\n${current}\n\nВведи новый ник (3–16 символов, только a-z, 0-9, _):\n\n💡 Применится при следующем подключении.`,
+    `✏️ *Смена ника бота*\n\n` + current + `\n\nВведи новый ник (3–16 символов)\nДопустимые символы: ` + "`" + `a-z 0-9 _` + "`" + `\n\n💡 Применится при следующем подключении.`,
     { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'main')]]) }
   );
 });

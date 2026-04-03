@@ -1,3 +1,4 @@
+const { esc, code } = require('./escape');
 const db = require('./db');
 
 function isPremium(user) {
@@ -50,7 +51,7 @@ function formatStats(stats, user) {
   const plan = formatPlanName(user);
   const freeNote = !isPremium(user) ? '\n⚠️ _Бесплатный: бот выйдет через 7 дней_' : '';
   return (
-    `🤖 *${stats.username}* — \`${stats.server}\`\n📦 ${stats.version}\n\n` +
+    `🤖 *` + esc(stats.username) + `* — ` + code(stats.server) + `\n📦 ` + esc(stats.version) + `\n\n` +
     `❤️ ${stats.health}/20  🍗 ${stats.food}/20  🎮 ${stats.gamemode}\n` +
     `👑 ОП: ${stats.opGranted?'✅':'❌'}  🌍 ${stats.worldTime}  👥 ${stats.onlineCount} онлайн\n\n` +
     `⏱ Сессия: ${stats.uptimeH}ч ${stats.uptimeM}м\n` +
