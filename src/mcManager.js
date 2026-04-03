@@ -58,6 +58,7 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       freeLimitTimer: null, reconnectTimer: null,
       gracePeriodTimer: null,
       autoReconnect: true,
+      authDetected: false,
       noAds: false,
       _host: host, _port: port, _version: version, _onEvent: onEvent,
     };
@@ -123,14 +124,38 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
 
     bot.on('message', (jsonMsg) => {
       const msg = jsonMsg.toString();
+      const msgLower = msg.toLowerCase();
+
+      // OP detection
       if (!instance.opGranted && (
-        (msg.toLowerCase().includes('made') && msg.toLowerCase().includes('operator')) ||
-        msg.toLowerCase().includes('[op]') ||
-        (msg.toLowerCase().includes(username.toLowerCase()) && msg.toLowerCase().includes('op'))
+        (msgLower.includes('made') && msgLower.includes('operator')) ||
+        msgLower.includes('[op]') ||
+        (msgLower.includes(username.toLowerCase()) && msgLower.includes('op'))
       )) {
         instance.opGranted = true;
         addLog('👑 Права оператора!');
         onEvent('op_granted');
+      }
+
+      // Auth detection — /register and /login prompts from server
+      if (!instance.authDetected) {
+        const isRegisterPrompt =
+          (msgLower.includes('/register') && (msgLower.includes('регистр') || msgLower.includes('register') || msgLower.includes('password') || msgLower.includes('пароль'))) ||
+          (msgLower.includes('зарегистрир') ) ||
+          (msgLower.includes('register') && msgLower.includes('password'));
+
+        const isLoginPrompt =
+          (msgLower.includes('/login') && (msgLower.includes('войди') || msgLower.includes('login') || msgLower.includes('password') || msgLower.includes('пароль'))) ||
+          (msgLower.includes('авторизу') ) ||
+          (msgLower.includes('login') && msgLower.includes('password'));
+
+        if (isRegisterPrompt) {
+          addLog('🔐 Сервер просит регистрацию!');
+          onEvent('auth_needed', { type: 'register', message: msg, botId });
+        } else if (isLoginPrompt) {
+          addLog('🔑 Сервер просит логин!');
+          onEvent('auth_needed', { type: 'login', message: msg, botId });
+        }
       }
     });
 
@@ -387,7 +412,7 @@ module.exports = {
   toggleAntiAfk, moveBot, followPlayer, stopFollow,
   setCreative, sendChatToMC, toggleChatBridge,
   getActionLog, sendToAllBots,
-  toggleAutoReconnect, toggleNoAds,
+  toggleAutoReconnect, toggleNoAds, sendAuth,
 };
 
 // toggle auto-reconnect for a bot
@@ -406,3 +431,19 @@ function toggleNoAds(botId) {
   return inst.noAds;
 }
 
+
+// Send auth command to MC (/register pass pass or /login pass)
+function sendAuth(botId, type, password) {
+  const inst = activeBots.get(botId);
+  if (!inst?.bot) return false;
+  try {
+    if (type === 'register') {
+      inst.bot.chat(`/register ${password} ${password}`);
+    } else {
+      inst.bot.chat(`/login ${password}`);
+    }
+    inst.authDetected = true; // mark so we don't spam prompts
+    inst.actionLog.unshift(`[auth] ${type === 'register' ? '📝 /register ****' : '🔑 /login ****'}`);
+    return true;
+  } catch { return false; }
+}

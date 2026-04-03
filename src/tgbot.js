@@ -53,6 +53,22 @@ function makeMcEventHandler(telegramId) {
           await bot.telegram.sendMessage(telegramId, '👑 Обнаружены права ОП! Открой панель бота и нажми «ОП выдан».'); break;
         case 'chat':
           await bot.telegram.sendMessage(telegramId, `💬 *[MC]* <${data.playerName}> ${data.message}`, { parse_mode:'Markdown' }); break;
+        case 'auth_needed': {
+          const authBotId = data.botId;
+          const typeLabel = data.type === 'register' ? 'регистрацию' : 'вход';
+          const cmdLabel  = data.type === 'register' ? '/register пароль пароль' : '/login пароль';
+          await bot.telegram.sendMessage(telegramId,
+            `🔐 *Сервер запрашивает ${typeLabel}!*\n\n` +
+            `Команда: \`${cmdLabel}\`\n` +
+            `Нажми кнопку и введи пароль:`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: [
+                [{ text: `🔐 Ввести пароль (${data.type === 'register' ? '/register' : '/login'})`, callback_data: `auth_${data.type}_${data.botId}` }],
+              ]}
+            }
+          ); break;
+        }
       }
     } catch {}
   };
@@ -350,13 +366,41 @@ async function doConnect(ctx, host, port, version) {
   // Determine bot username
   let mcUsername;
   if (isPremium(user) && user.custom_bot_nick) {
-    // use custom nick but append number if multiple bots
     const existing = mc.getActiveBotsForUser(userId);
     mcUsername = existing.length > 0 ? `${user.custom_bot_nick}${existing.length+1}` : user.custom_bot_nick;
+  } else {
+    // Preview the bot number (next in sequence)
+    const nextNum = db.peekNextBotNumber();
+    mcUsername = `whminebot-${nextNum}`;
   }
-  // else will be set by createBot default
 
-  await ctx.editMessageText(`⏳ Подключаюсь...\n\n🌐 \`${host}:${port}\`\n📦 Версия: ${version}`, { parse_mode:'Markdown' });
+  // Show nick BEFORE connecting — user needs to whitelist it
+  setState(userId, { step: 'pre_connect', host, port, version, mcUsername });
+  await ctx.editMessageText(
+    `🤖 *Готов к подключению*\n\n` +
+    `🌐 Сервер: \`${host}:${port}\`\n` +
+    `📦 Версия: ${version}\n` +
+    `👤 Ник бота: \`${mcUsername}\`\n\n` +
+    `⚠️ *Если на сервере есть whitelist — добавь этот ник перед подключением!*\n\n` +
+    `Нажми «Подключить» когда будешь готов:`,
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🎮 Подключить', 'do_connect_now')],
+        [Markup.button.callback('❌ Отмена', 'main')],
+      ])
+    }
+  );
+}
+
+async function doConnectNow(ctx) {
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  const { host, port, version, mcUsername } = state;
+  clearState(userId);
+
+  const user = db.getUser(userId);
+  await ctx.editMessageText(`⏳ Подключаюсь...\n\n🌐 \`${host}:${port}\`\n📦 Версия: ${version}\n👤 Ник: \`${mcUsername}\``, { parse_mode:'Markdown' });
 
   const botNumber = db.getNextBotNumber();
   const botId = db.createBot(user.id, botNumber, host, port, version, mcUsername);
@@ -367,11 +411,11 @@ async function doConnect(ctx, host, port, version) {
     if (stats) {
       await ctx.editMessageText(formatStats(stats, user), { parse_mode:'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) });
     } else {
-      await ctx.editMessageText('✅ Бот подключён!', kb.mainMenu(1));
+      await ctx.editMessageText('✅ Бот подключён!', kb.mainMenu(mc.getActiveBotsForUser(userId).length, isPremium(user)));
     }
   } catch (e) {
     db.updateBotStatus(botId, 'disconnected');
-    await ctx.editMessageText(`❌ *Ошибка подключения*\n\n${e.message}`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length) });
+    await ctx.editMessageText(`❌ *Ошибка подключения*\n\n${e.message}`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length, isPremium(user)) });
   }
 }
 
@@ -403,7 +447,25 @@ bot.on('text', async (ctx) => {
     const nick = text.replace(/[^a-zA-Z0-9_]/g,'').slice(0,16);
     if (nick.length < 3) return ctx.reply('❌ Ник должен быть от 3 символов (только a-z, 0-9, _).');
     db.updateCustomNick(userId, nick);
-    return ctx.reply(`✅ Ник бота: \`${nick}\`\n\nПри следующем подключении бот войдёт с этим ником.`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length) });
+    return ctx.reply(`✅ Ник бота: \`${nick}\`\n\nПри следующем подключении бот войдёт с этим ником.`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length, true) });
+  }
+  if (state.step === 'auth_password') {
+    const { authType, authBotId } = state;
+    clearState(userId);
+    // Try to delete the message with password for privacy
+    try { await ctx.deleteMessage(); } catch {}
+    if (!authBotId || !authType) return ctx.reply('❌ Сессия устарела. Попробуй снова.');
+    const ok = mc.sendAuth(authBotId, authType, text);
+    if (ok) {
+      return ctx.reply(
+        authType === 'register'
+          ? `✅ Команда \`/register ****\` отправлена на сервер!`
+          : `✅ Команда \`/login ****\` отправлена на сервер!`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('📊 Открыть панель', `bot_panel_${authBotId}`)]]) }
+      );
+    } else {
+      return ctx.reply('❌ Бот не подключён или произошла ошибка.', Markup.inlineKeyboard([[Markup.button.callback('🏠 Меню', 'main')]]));
+    }
   }
   if (userId !== config.ADMIN_ID) return;
   // ADMIN flows
@@ -543,7 +605,7 @@ bot.action(/^chk_(\d+)_(\d+)_(monthly|eternal)$/, async (ctx) => {
   if (invoice?.status === 'paid') {
     db.updatePayment(pid,'completed');
     type==='monthly' ? db.updateUserPremium(ctx.from.id,'monthly',Math.floor(Date.now()/1000)+30*24*3600) : db.updateUserPremium(ctx.from.id,'eternal',null);
-    await ctx.editMessageText(`🎉 *Premium ${type==='eternal'?'Eternal':'Monthly'} активирован!*`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(ctx.from.id).length) });
+    await ctx.editMessageText(`🎉 *Premium ${type==='eternal'?'Eternal':'Monthly'} активирован!*`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(ctx.from.id).length, isPremium(db.getUser(ctx.from.id))) });
   } else { await ctx.answerCbQuery('❌ Не найдено. Подожди.', { show_alert: true }); }
 });
 
@@ -563,7 +625,7 @@ bot.action(/^card_(m|e)_(\d+)$/, async (ctx) => {
   const user = db.getUser(userId); const s = getSettings();
   const pid = db.createPayment(user.id, userId, type, 'card', type==='monthly'?s.cardMonthlyPrice:s.cardEternalPrice);
   try { await bot.telegram.sendMessage(config.ADMIN_ID, `💳 *Заявка #${pid}*\n\n👤 @${ctx.from.username||ctx.from.first_name} (${userId})\nТариф: ${type}`, { parse_mode:'Markdown', ...kb.cardApproveKeyboard(userId, pid) }); } catch {}
-  await ctx.editMessageText('✅ *Заявка отправлена.* Ожидай подтверждения администратора.', { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length) });
+  await ctx.editMessageText('✅ *Заявка отправлена.* Ожидай подтверждения администратора.', { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length, isPremium(db.getUser(userId))) });
 });
 bot.action(/^adm_card_(m|e)_(\d+)_(\d+)$/, async (ctx) => {
   if (ctx.from.id !== config.ADMIN_ID) return ctx.answerCbQuery('❌');
@@ -601,7 +663,7 @@ async function handlePromoCode(ctx, code) {
   const newExpires = currentExpires + promo.days*24*3600;
   if (!isEternal(user)) db.updateUserPremium(userId,'monthly',newExpires);
   const exp = new Date(newExpires*1000).toLocaleDateString('ru-RU');
-  await ctx.reply(`🎉 *+${promo.days} дней Premium!*\nАктивен до: ${exp}`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length) });
+  await ctx.reply(`🎉 *+${promo.days} дней Premium!*\nАктивен до: ${exp}`, { parse_mode:'Markdown', ...kb.mainMenu(mc.getActiveBotsForUser(userId).length, isPremium(db.getUser(userId))) });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -862,4 +924,38 @@ bot.action(/^toggle_ads_(\d+)$/, async (ctx) => {
       { parse_mode:'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) }
     );
   }
+});
+
+// ─── Pre-connect confirm ──────────────────────────────────────────────────────
+bot.action('do_connect_now', async (ctx) => {
+  await ctx.answerCbQuery();
+  const state = getState(ctx.from.id);
+  if (state.step !== 'pre_connect') return ctx.editMessageText('❌ Сессия устарела.', kb.mainMenu(0));
+  await doConnectNow(ctx);
+});
+
+// ─── Auth: register/login flow ────────────────────────────────────────────────
+bot.action(/^auth_(register|login)_(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const type = ctx.match[1];
+  const botId = parseInt(ctx.match[2]);
+  setState(ctx.from.id, { step: 'auth_password', authType: type, authBotId: botId });
+  const label = type === 'register' ? 'регистрации (/register пароль пароль)' : 'входа (/login пароль)';
+  await ctx.reply(
+    `🔐 *Введи пароль для ${label}:*\n\n⚠️ Сообщение удалится из чата после отправки — пароль никуда не сохраняется.`,
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', `bot_panel_${botId}`)]]) }
+  );
+});
+
+// ─── Change nick (Premium, from main menu) ────────────────────────────────────
+bot.action('change_nick', async (ctx) => {
+  await ctx.answerCbQuery();
+  const user = db.getUser(ctx.from.id);
+  if (!isPremium(user)) return ctx.answerCbQuery('⚠️ Только для Premium!', { show_alert: true });
+  const current = user.custom_bot_nick ? `Текущий ник: \`${user.custom_bot_nick}\`` : 'Ник не задан — используется стандартный \`whminebot-N\`';
+  setState(ctx.from.id, { step: 'set_custom_nick' });
+  await ctx.editMessageText(
+    `✏️ *Смена ника бота*\n\n${current}\n\nВведи новый ник (3–16 символов, только a-z, 0-9, _):\n\n💡 Применится при следующем подключении.`,
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'main')]]) }
+  );
 });

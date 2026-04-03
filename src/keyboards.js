@@ -1,16 +1,20 @@
 const { Markup } = require('telegraf');
 const { MC_VERSIONS } = require('./mcManager');
 
-const mainMenu = (activeBotCount = 0) =>
-  Markup.inlineKeyboard([
-    activeBotCount > 0
-      ? [Markup.button.callback(`📊 Мои боты (${activeBotCount})`, 'my_bots')]
-      : [Markup.button.callback('🎮 Подключить бота', 'connect')],
-    [Markup.button.callback('🎮 Подключить ещё бота', 'connect')],
-    [Markup.button.callback('💎 Тарифы и оплата', 'tariff')],
-    [Markup.button.callback('🕐 Недавние серверы', 'recent_servers')],
-    [Markup.button.callback('ℹ️ Помощь', 'help')],
-  ].filter((_, i) => activeBotCount > 0 || i !== 1));
+const mainMenu = (activeBotCount = 0, isPremium = false) => {
+  const rows = [];
+  if (activeBotCount > 0) {
+    rows.push([Markup.button.callback(`📊 Мои боты (${activeBotCount})`, 'my_bots')]);
+    rows.push([Markup.button.callback('🎮 Подключить ещё бота', 'connect')]);
+  } else {
+    rows.push([Markup.button.callback('🎮 Подключить бота', 'connect')]);
+  }
+  if (isPremium) rows.push([Markup.button.callback('✏️ Сменить ник бота', 'change_nick')]);
+  rows.push([Markup.button.callback('💎 Тарифы и оплата', 'tariff')]);
+  rows.push([Markup.button.callback('🕐 Недавние серверы', 'recent_servers')]);
+  rows.push([Markup.button.callback('ℹ️ Помощь', 'help')]);
+  return Markup.inlineKeyboard(rows);
+};
 
 const botListKeyboard = (bots) => {
   const rows = bots.map((inst, i) => {

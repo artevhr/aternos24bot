@@ -205,3 +205,9 @@ module.exports = {
   },
   getRecentServers: (tid) => all('SELECT * FROM recent_servers WHERE telegram_id=? ORDER BY last_used DESC LIMIT 5', [tid]),
 };
+
+// Peek next bot number without incrementing
+module.exports.peekNextBotNumber = () => {
+  const r = get('SELECT count FROM bot_counter WHERE id = 1');
+  return r ? r.count + 1 : 1;
+};
