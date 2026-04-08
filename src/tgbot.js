@@ -350,7 +350,7 @@ bot.action(/^recent_(\d+)$/, async (ctx) => {
   const servers = db.getRecentServers(ctx.from.id);
   const server = servers.find(s => s.id == ctx.match[1]);
   if (!server) return ctx.editMessageText('❌ Сервер не найден.', userMenu(ctx.from.id));
-  await doConnect(ctx, server.host, server.port, server.version);
+  await doConnect(ctx, server.host, server.port, server.version, null);
 });
 
 bot.action('port_default', async (ctx) => {
@@ -359,73 +359,8 @@ bot.action('port_default', async (ctx) => {
   await ctx.editMessageText('📦 *Шаг 3/3 — Версия*', { parse_mode:'Markdown', ...kb.versionKeyboard(0) });
 });
 bot.action(/^vp_(\d+)$/, async (ctx) => { await ctx.answerCbQuery(); await ctx.editMessageReplyMarkup(kb.versionKeyboard(parseInt(ctx.match[1])).reply_markup); });
-bot.action(/^ver_(.+)$/, async (ctx) => {
-  await ctx.answerCbQuery();
-  const state = getState(ctx.from.id);
-  if (state.step !== 'version') return;
-  clearState(ctx.from.id);
-  await doConnect(ctx, state.host, state.port, ctx.match[1]);
-});
+// ver_ handled below in CONNECT FLOW section
 
-async function doConnect(ctx, host, port, version) {
-  const userId = ctx.from.id;
-  const user = db.getUser(userId);
-
-  // Determine bot username
-  let mcUsername;
-  if (isPremium(user) && user.custom_bot_nick) {
-    const existing = mc.getActiveBotsForUser(userId);
-    mcUsername = existing.length > 0 ? `${user.custom_bot_nick}${existing.length+1}` : user.custom_bot_nick;
-  } else {
-    // Preview the bot number (next in sequence)
-    const nextNum = db.peekNextBotNumber();
-    mcUsername = `whminebot-${nextNum}`;
-  }
-
-  // Show nick BEFORE connecting — user needs to whitelist it
-  setState(userId, { step: 'pre_connect', host, port, version, mcUsername });
-  await ctx.editMessageText(
-    '🤖 *Готов к подключению*\n\n' +
-    '🌐 Сервер: ' + code(host + ':' + port) + '\n' +
-    '📦 Версия: ' + esc(version) + '\n' +
-    '👤 Ник бота: ' + code(mcUsername) + '\n\n' +
-    '⚠️ *Если на сервере есть whitelist — добавь этот ник перед подключением!*\n\n' +
-    'Нажми «Подключить» когда будешь готов:',
-    {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('🎮 Подключить', 'do_connect_now')],
-        [Markup.button.callback('❌ Отмена', 'main')],
-      ])
-    }
-  );
-}
-
-async function doConnectNow(ctx) {
-  const userId = ctx.from.id;
-  const state = getState(userId);
-  const { host, port, version, mcUsername } = state;
-  clearState(userId);
-
-  const user = db.getUser(userId);
-  await ctx.editMessageText('⏳ Подключаюсь...\n\n🌐 ' + code(host + ':' + port) + '\n📦 Версия: ' + esc(version) + '\n👤 Ник: ' + code(mcUsername), { parse_mode:'Markdown' });
-
-  const botNumber = db.getNextBotNumber();
-  const botId = db.createBot(user.id, botNumber, host, port, version, mcUsername);
-
-  try {
-    await mc.connectBot(userId, host, port, version, botId, makeMcEventHandler(userId));
-    const stats = mc.getBotStats(botId);
-    if (stats) {
-      await ctx.editMessageText(formatStats(stats, user), { parse_mode:'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) });
-    } else {
-      await ctx.editMessageText('✅ Бот подключён!', userMenu(userId));
-    }
-  } catch (e) {
-    db.updateBotStatus(botId, 'disconnected');
-    await ctx.editMessageText(`❌ *Ошибка подключения*\n\n${e.message}`, { parse_mode:'Markdown', ...userMenu(userId) });
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TEXT HANDLER
@@ -449,6 +384,37 @@ bot.on('text', async (ctx) => {
     return ctx.reply(ok ? `✅ Следую за \`${text}\`` : '❌ Не удалось.', { parse_mode:'Markdown', ...kb.movementKeyboard(botId, ok?text:null) });
   }
   if (state.step === 'use_promo') { clearState(userId); return handlePromoCode(ctx, text); }
+
+  // Manual nick entry during connect flow
+  if (state.step === 'pacc_enter_nick') {
+    const nick = text.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+    if (nick.length < 3) return ctx.reply('❌ Слишком короткий ник (мин. 3 символа, только a-z 0-9 _).');
+    setState(userId, { ...state, step: 'pre_connect' });
+    // Ask if save to accounts
+    return ctx.reply(
+      '👤 Ник: ' + code(nick) + '\n\nСохранить в менеджере аккаунтов для быстрого выбора?',
+      { parse_mode: 'Markdown', ...Markup.inlineKeyboard([
+        [Markup.button.callback('💾 Сохранить и подключить', 'pacc_save_' + nick)],
+        [Markup.button.callback('🎮 Подключить без сохранения', 'pacc_nosave_' + nick)],
+        [Markup.button.callback('❌ Отмена', 'main')],
+      ])}
+    );
+  }
+
+  // Add nick to account manager
+  if (state.step === 'acm_add_nick') {
+    const nick = text.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 16);
+    if (nick.length < 3) return ctx.reply('❌ Слишком короткий ник (мин. 3 символа).');
+    clearState(userId);
+    try {
+      db.createAccount(userId, nick);
+      return ctx.reply('✅ Аккаунт ' + code(nick) + ' сохранён!', { parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('👤 Менеджер аккаунтов', 'acc_manager')]]) });
+    } catch {
+      return ctx.reply('❌ Ник ' + code(nick) + ' уже есть в списке.', { parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('👤 Назад', 'acc_manager')]]) });
+    }
+  }
   if (state.step === 'set_custom_nick') {
     clearState(userId);
     if (!isPremium(db.getUser(userId))) return ctx.reply('⚠️ Только для Premium.');
@@ -870,22 +836,6 @@ bot.action('help', async (ctx) => {
 });
 
 
-// ─── Change nick (Premium, from main menu) ────────────────────────────────────
-bot.action('change_nick', async (ctx) => {
-  const user = db.getUser(ctx.from.id);
-  if (!isPremium(user)) {
-    return ctx.answerCbQuery('⚠️ Только для Premium!', { show_alert: true });
-  }
-  await ctx.answerCbQuery();
-  const current = user.custom_bot_nick
-    ? 'Текущий ник: ' + code(user.custom_bot_nick)
-    : 'Ник не задан — используется стандартный ' + code('whminebot-N');
-  setState(ctx.from.id, { step: 'set_custom_nick' });
-  await ctx.editMessageText(
-    `✏️ *Смена ника бота*\n\n` + current + `\n\nВведи новый ник (3–16 символов)\nДопустимые символы: ` + "`" + `a-z 0-9 _` + "`" + `\n\n💡 Применится при следующем подключении.`,
-    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'main')]]) }
-  );
-});
 // ─── Keep bot selection (multi-bot grace period) ──────────────────────────────
 bot.action(/^keep_bot_(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery();
@@ -943,13 +893,7 @@ bot.action(/^toggle_ads_(\d+)$/, async (ctx) => {
   }
 });
 
-// ─── Pre-connect confirm ──────────────────────────────────────────────────────
-bot.action('do_connect_now', async (ctx) => {
-  await ctx.answerCbQuery();
-  const state = getState(ctx.from.id);
-  if (state.step !== 'pre_connect') return ctx.editMessageText('❌ Сессия устарела.', userMenu(ctx.from.id));
-  await doConnectNow(ctx);
-});
+// do_connect_now handled in CONNECT FLOW section below
 
 // ─── Auth: register/login flow ────────────────────────────────────────────────
 bot.action(/^auth_(register|login)_(\d+)$/, async (ctx) => {
@@ -964,4 +908,296 @@ bot.action(/^auth_(register|login)_(\d+)$/, async (ctx) => {
   );
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CONNECT FLOW — VERSION PICKER → ACCOUNT PICKER → CONFIRM → CONNECT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Version selected — Premium gets account picker, Free goes straight to confirm
+bot.action(/^ver_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (state.step !== 'version') return;
+
+  const version = ctx.match[1];
+  setState(userId, { ...state, step: 'pick_account', version });
+  const user = db.getUser(userId);
+
+  if (isPremium(user)) {
+    await showAccountPicker(ctx, userId, state.host, state.port, version);
+  } else {
+    // Free user — no account picker, use default nick
+    await showPreConnect(ctx, userId, state.host, state.port, version, null);
+  }
+});
+
+// ─── Account Picker ───────────────────────────────────────────────────────────
+async function showAccountPicker(ctx, userId, host, port, version) {
+  const accounts = db.getAccounts(userId);
+
+  const rows = [];
+  for (const a of accounts) {
+    rows.push([Markup.button.callback(`👤 ${a.nick}`, `pacc_${a.id}`)]);
+  }
+  rows.push([Markup.button.callback('✏️ Ввести ник вручную', 'pacc_manual')]);
+  rows.push([Markup.button.callback('🤖 Авто-ник (whminebot-N)', 'pacc_auto')]);
+  rows.push([Markup.button.callback('❌ Отмена', 'main')]);
+
+  const listText = accounts.length
+    ? accounts.map(a => `• \`${a.nick}\``).join('\n')
+    : '_Нет сохранённых аккаунтов_';
+
+  await ctx.editMessageText(
+    `👤 *Выбери ник для бота*\n\n` +
+    `🌐 ` + code(`${host}:${port}`) + ` | 📦 ` + esc(version) + `\n\n` +
+    listText,
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) }
+  );
+}
+
+// Picked saved account
+bot.action(/^pacc_(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
+
+  const accId = parseInt(ctx.match[1]);
+  const account = db.getAccount(accId, userId);
+  if (!account) return ctx.answerCbQuery('❌ Аккаунт не найден', { show_alert: true });
+
+  db.touchAccount(accId);
+  setState(userId, { ...state, step: 'pre_connect' });
+  await showPreConnect(ctx, userId, state.host, state.port, state.version, account.nick);
+});
+
+// Auto nick
+bot.action('pacc_auto', async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
+  setState(userId, { ...state, step: 'pre_connect' });
+  await showPreConnect(ctx, userId, state.host, state.port, state.version, '__auto__');
+});
+
+// Enter nick manually
+bot.action('pacc_manual', async (ctx) => {
+  await ctx.answerCbQuery();
+  const state = getState(ctx.from.id);
+  if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
+  setState(ctx.from.id, { ...state, step: 'pacc_enter_nick' });
+  await ctx.editMessageText(
+    '✏️ *Введи ник бота:*\n\nТолько латиница, цифры и _\nПример: ' + code('Steve123'),
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'main')]]) }
+  );
+});
+
+// ─── Pre-connect confirm screen ───────────────────────────────────────────────
+async function showPreConnect(ctx, userId, host, port, version, chosenNick) {
+  // Resolve final nick
+  const user = db.getUser(userId);
+  const existing = mc.getActiveBotsForUser(userId);
+  const takenNicks = existing.map(i => (i.bot?.username || '').toLowerCase()).filter(Boolean);
+
+  let mcUsername;
+  if (!chosenNick || chosenNick === '__auto__') {
+    // Always use whminebot-N for auto
+    const nextNum = db.peekNextBotNumber();
+    mcUsername = `whminebot-${nextNum}`;
+  } else {
+    // Use chosen nick, add suffix only on actual conflict
+    if (takenNicks.includes(chosenNick.toLowerCase())) {
+      let suffix = 2;
+      while (takenNicks.includes((chosenNick + suffix).toLowerCase())) suffix++;
+      mcUsername = chosenNick + suffix;
+    } else {
+      mcUsername = chosenNick;
+    }
+  }
+
+  setState(userId, {
+    step: 'pre_connect',
+    host, port, version, mcUsername,
+    saveNick: (chosenNick && chosenNick !== '__auto__') ? null : null,
+  });
+
+  await ctx.editMessageText(
+    '🤖 *Готов к подключению*\n\n' +
+    '🌐 Сервер: ' + code(`${host}:${port}`) + '\n' +
+    '📦 Версия: ' + esc(version) + '\n' +
+    '👤 Ник бота: ' + code(mcUsername) + '\n\n' +
+    '⚠️ Если на сервере whitelist — добавь этот ник до подключения!\n\n' +
+    'Нажми *Подключить* когда готов:',
+    {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('🎮 Подключить', 'do_connect_now')],
+        [Markup.button.callback('◀️ Назад', 'main')],
+      ]),
+    }
+  );
+}
+
+// Confirm and connect
+bot.action('do_connect_now', async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (state.step !== 'pre_connect' || !state.host) {
+    return ctx.editMessageText('❌ Сессия истекла. Начни подключение заново.', userMenu(userId));
+  }
+  const { host, port, version, mcUsername } = state;
+  clearState(userId);
+
+  await ctx.editMessageText(
+    '⏳ Подключаюсь...\n\n' +
+    '🌐 ' + code(`${host}:${port}`) + '\n' +
+    '📦 Версия: ' + esc(version) + '\n' +
+    '👤 Ник: ' + code(mcUsername),
+    { parse_mode: 'Markdown' }
+  );
+
+  const user = db.getUser(userId);
+  const botNumber = db.getNextBotNumber();
+  const botId = db.createBot(user.id, botNumber, host, port, version, mcUsername);
+
+  try {
+    await mc.connectBot(userId, host, port, version, botId, makeMcEventHandler(userId));
+    const stats = mc.getBotStats(botId);
+    if (stats) {
+      await ctx.editMessageText(
+        formatStats(stats, user),
+        { parse_mode: 'Markdown', ...kb.panelKeyboard(stats, isPremium(user), botId) }
+      );
+    } else {
+      await ctx.editMessageText('✅ Бот подключён!', userMenu(userId));
+    }
+  } catch (e) {
+    db.updateBotStatus(botId, 'disconnected');
+    await ctx.editMessageText(
+      '❌ *Ошибка подключения*\n\n' + esc(e.message),
+      { parse_mode: 'Markdown', ...userMenu(userId) }
+    );
+  }
+});
+
+// ─── Недавние серверы → account picker (для premium) ────────────────────────
+bot.action(/^recent_(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const userId = ctx.from.id;
+  const servers = db.getRecentServers(userId);
+  const server = servers.find(s => String(s.id) === ctx.match[1]);
+  if (!server) return ctx.editMessageText('❌ Сервер не найден.', userMenu(userId));
+
+  const user = db.getUser(userId);
+  setState(userId, { step: 'pick_account', host: server.host, port: server.port, version: server.version });
+
+  if (isPremium(user)) {
+    await showAccountPicker(ctx, userId, server.host, server.port, server.version);
+  } else {
+    await showPreConnect(ctx, userId, server.host, server.port, server.version, null);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ACCOUNT MANAGER (отдельно от connect flow)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+bot.action('acc_manager', async (ctx) => {
+  await ctx.answerCbQuery();
+  const user = db.getUser(ctx.from.id);
+  if (!isPremium(user)) return ctx.answerCbQuery('⚠️ Только для Premium!', { show_alert: true });
+  await showAccountManager(ctx);
+});
+
+async function showAccountManager(ctx) {
+  const userId = ctx.from.id;
+  const accounts = db.getAccounts(userId);
+  const MAX = 10;
+
+  let text = `👤 *Менеджер аккаунтов*\n\n`;
+  if (accounts.length) {
+    text += accounts.map((a, i) => `${i + 1}. \`${a.nick}\``).join('\n');
+  } else {
+    text += '_Нет сохранённых аккаунтов_\n\nДобавь ники Minecraft которые используешь — при подключении сможешь выбрать нужный.';
+  }
+  text += `\n\n📋 ${accounts.length}/${MAX} аккаунтов`;
+
+  const rows = [];
+  if (accounts.length < MAX) {
+    rows.push([Markup.button.callback('➕ Добавить аккаунт', 'acm_add')]);
+  }
+  for (const a of accounts) {
+    rows.push([Markup.button.callback(`🗑 Удалить: ${a.nick}`, `acm_del_${a.id}`)]);
+  }
+  rows.push([Markup.button.callback('◀️ Главное меню', 'main')]);
+
+  await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(rows) });
+}
+
+bot.action('acm_add', async (ctx) => {
+  await ctx.answerCbQuery();
+  setState(ctx.from.id, { step: 'acm_add_nick' });
+  await ctx.editMessageText(
+    '➕ *Добавить ник*\n\nВведи свой Minecraft-ник:',
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'acc_manager')]]) }
+  );
+});
+
+bot.action(/^acm_del_(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const accId = parseInt(ctx.match[1]);
+  const account = db.getAccount(accId, ctx.from.id);
+  if (!account) return ctx.answerCbQuery('❌ Не найден', { show_alert: true });
+  db.deleteAccount(accId, ctx.from.id);
+  await ctx.answerCbQuery(`🗑 ${account.nick} удалён`);
+  await showAccountManager(ctx);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CHANGE NICK (Настройки → ник по умолчанию)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+bot.action('change_nick', async (ctx) => {
+  await ctx.answerCbQuery();
+  const user = db.getUser(ctx.from.id);
+  if (!isPremium(user)) return ctx.answerCbQuery('⚠️ Только для Premium!', { show_alert: true });
+
+  const current = user.custom_bot_nick
+    ? 'Текущий ник по умолчанию: ' + code(user.custom_bot_nick)
+    : 'Ник по умолчанию не задан';
+
+  setState(ctx.from.id, { step: 'set_custom_nick' });
+  await ctx.editMessageText(
+    '✏️ *Ник по умолчанию*\n\n' +
+    current + '\n\n' +
+    'Этот ник будет предложен первым при подключении.\n' +
+    'Введи ник (3–16 символов, ' + code('a-z 0-9 _') + '):',
+    { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'main')]]) }
+  );
+});
+
 module.exports = bot;
+
+// Save nick and connect
+bot.action(/^pacc_save_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const nick = ctx.match[1];
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
+
+  try { db.createAccount(userId, nick); } catch {}
+  await showPreConnect(ctx, userId, state.host, state.port, state.version, nick);
+});
+
+// Connect without saving nick
+bot.action(/^pacc_nosave_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const nick = ctx.match[1];
+  const userId = ctx.from.id;
+  const state = getState(userId);
+  if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
+  await showPreConnect(ctx, userId, state.host, state.port, state.version, nick);
+});

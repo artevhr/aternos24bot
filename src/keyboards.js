@@ -9,7 +9,9 @@ const mainMenu = (activeBotCount = 0, isPremium = false) => {
   } else {
     rows.push([Markup.button.callback('🎮 Подключить бота', 'connect')]);
   }
-  if (isPremium) rows.push([Markup.button.callback('✏️ Сменить ник бота', 'change_nick')]);
+  if (isPremium) {
+    rows.push([Markup.button.callback('👤 Менеджер аккаунтов', 'acc_manager')]);
+  }
   rows.push([Markup.button.callback('💎 Тарифы и оплата', 'tariff')]);
   rows.push([Markup.button.callback('🕐 Недавние серверы', 'recent_servers')]);
   rows.push([Markup.button.callback('ℹ️ Помощь', 'help')]);

@@ -76,6 +76,13 @@ const ready = initSqlJs().then((SQL) => {
       last_used INTEGER DEFAULT (strftime('%s','now')),
       UNIQUE(telegram_id, host, port)
     );
+    CREATE TABLE IF NOT EXISTS mc_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER NOT NULL,
+      nick TEXT NOT NULL,
+      last_used INTEGER DEFAULT (strftime('%s','now')),
+      UNIQUE(telegram_id, nick)
+    );
     INSERT OR IGNORE INTO bot_counter VALUES (1, 0);
   `);
   // Seed default settings if not set
@@ -211,3 +218,21 @@ module.exports.peekNextBotNumber = () => {
   const r = get('SELECT count FROM bot_counter WHERE id = 1');
   return r ? r.count + 1 : 1;
 };
+
+// ── MC ACCOUNTS (Premium) ──
+// Каждый пользователь может сохранить несколько ников (до 5 на free, до 10 на premium)
+// и выбирать нужный при подключении
+module.exports.createAccount = (tid, nick) =>
+  run('INSERT OR IGNORE INTO mc_accounts (telegram_id, nick) VALUES (?, ?)', [tid, nick]);
+
+module.exports.getAccounts = (tid) =>
+  all('SELECT * FROM mc_accounts WHERE telegram_id = ? ORDER BY last_used DESC', [tid]);
+
+module.exports.deleteAccount = (id, tid) =>
+  run('DELETE FROM mc_accounts WHERE id = ? AND telegram_id = ?', [id, tid]);
+
+module.exports.touchAccount = (id) =>
+  run('UPDATE mc_accounts SET last_used = strftime(\'%s\',\'now\') WHERE id = ?', [id]);
+
+module.exports.getAccount = (id, tid) =>
+  get('SELECT * FROM mc_accounts WHERE id = ? AND telegram_id = ?', [id, tid]);
