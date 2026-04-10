@@ -38,7 +38,7 @@ const panelKeyboard = (stats, isPremium, botId) => {
   else { opLabel = '🔑 Запросить ОП'; opAction = `request_op_${botId}`; }
 
   const rows = [
-    [Markup.button.callback('🔄 Обновить', `bot_panel_${botId}`)],
+    [Markup.button.callback('🔄 Обновить', `bot_panel_${botId}`), Markup.button.callback('👥 Игроки', `players_${botId}`)],
     [Markup.button.callback(afkLabel, `toggle_afk_${botId}`), Markup.button.callback(reconnLabel, `toggle_reconnect_${botId}`)],
     [Markup.button.callback(opLabel, opAction)],
   ];

@@ -122,6 +122,18 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       if (instance.chatBridgeEnabled) onEvent('chat', entry);
     });
 
+    bot.on('playerJoined', (player) => {
+      if (player.username === username) return; // ignore self
+      addLog(`➕ ${player.username} зашёл на сервер`);
+      onEvent('player_join', player.username);
+    });
+
+    bot.on('playerLeft', (player) => {
+      if (player.username === username) return;
+      addLog(`➖ ${player.username} вышел с сервера`);
+      onEvent('player_leave', player.username);
+    });
+
     bot.on('message', (jsonMsg) => {
       const msg = jsonMsg.toString();
       const msgLower = msg.toLowerCase();
@@ -411,7 +423,7 @@ module.exports = {
   getBotStats, getFirstBotStats, getInventory, getChatLog,
   toggleAntiAfk, moveBot, followPlayer, stopFollow,
   setCreative, sendChatToMC, toggleChatBridge,
-  getActionLog, sendToAllBots,
+  getActionLog, sendToAllBots, getOnlinePlayers,
   toggleAutoReconnect, toggleNoAds, sendAuth,
 };
 
@@ -446,4 +458,15 @@ function sendAuth(botId, type, password) {
     inst.actionLog.unshift(`[auth] ${type === 'register' ? '📝 /register ****' : '🔑 /login ****'}`);
     return true;
   } catch { return false; }
+}
+
+function getOnlinePlayers(botId) {
+  const inst = activeBots.get(botId);
+  if (!inst?.bot) return null;
+  try {
+    return Object.values(inst.bot.players || {})
+      .map(p => p.username)
+      .filter(Boolean)
+      .sort();
+  } catch { return null; }
 }

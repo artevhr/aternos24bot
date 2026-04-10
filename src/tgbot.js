@@ -1,4 +1,12 @@
 const { Telegraf, Markup } = require('telegraf');
+
+function getWebAppUrl() {
+  // Railway sets RAILWAY_PUBLIC_DOMAIN automatically
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
+  if (!domain) return null;
+  const base = domain.startsWith('http') ? domain : `https://${domain}`;
+  return base;
+}
 const { esc, code } = require('./escape');
 const config = require('./config');
 const db = require('./db');
@@ -119,6 +127,13 @@ bot.start(async (ctx) => {
     }
   }
   const bots = mc.getActiveBotsForUser(ctx.from.id);
+  const webUrl = getWebAppUrl();
+  const startKb = webUrl
+    ? { ...kb.mainMenu(bots.length, isPremium(db.getUser(ctx.from.id))), inline_keyboard: [
+        [Markup.button.webApp('🎮 Открыть панель', webUrl)],
+        ...kb.mainMenu(bots.length, isPremium(db.getUser(ctx.from.id))).reply_markup.inline_keyboard
+      ]}
+    : userMenu(ctx.from.id);
   await ctx.reply(
     `👋 *Привет!*\n\nЯ *WHMineBot* — держу твой Minecraft-сервер живым 24/7.\n\n🆓 Бесплатно: 1 бот, до 7 дней\n💎 Premium: несколько ботов, всегда онлайн + WASD, чат-мост, свой ник`,
     { parse_mode:'Markdown', ...userMenu(ctx.from.id) }
@@ -1200,4 +1215,35 @@ bot.action(/^pacc_nosave_(.+)$/, async (ctx) => {
   const state = getState(userId);
   if (!state.host) return ctx.answerCbQuery('❌ Сессия истекла', { show_alert: true });
   await showPreConnect(ctx, userId, state.host, state.port, state.version, nick);
+});
+
+// ─── Players list ─────────────────────────────────────────────────────────────
+bot.action(/^players_(\d+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const botId = parseInt(ctx.match[1]);
+  const inst = mc.getActiveBotByBotId(botId);
+  if (!inst || inst.userId !== ctx.from.id)
+    return ctx.answerCbQuery('❌ Бот недоступен', { show_alert: true });
+
+  const players = mc.getOnlinePlayers(botId);
+  if (players === null)
+    return ctx.answerCbQuery('❌ Нет данных', { show_alert: true });
+
+  const rec = db.getBotById(botId);
+  let text = `👥 *Игроки онлайн* — ` + code(`${rec.server_host}:${rec.server_port}`) + `\n\n`;
+
+  if (players.length === 0) {
+    text += '_Никого нет на сервере_';
+  } else {
+    text += players.map((p, i) => `${i + 1}. \`${p}\``).join('\n');
+    text += `\n\nВсего: *${players.length}*`;
+  }
+
+  await ctx.editMessageText(text, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('🔄 Обновить', `players_${botId}`)],
+      [Markup.button.callback('◀️ Назад в панель', `bot_panel_${botId}`)],
+    ]),
+  });
 });
