@@ -1,179 +1,147 @@
 const express = require('express');
-const crypto = require('crypto');
+const router = express.Router();
 const db = require('./db');
 const mc = require('./mcManager');
-const config = require('./config');
 
-const router = express.Router();
-
-// ─── Telegram initData validation ────────────────────────────────────────────
-function validateTelegramData(initData) {
+function getUserId(tgDataStr) {
+  if (!tgDataStr) return null;
+  if (tgDataStr.startsWith('dev_')) return parseInt(tgDataStr.slice(4)) || null;
   try {
-    const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    if (!hash) return null;
-
-    params.delete('hash');
-    const dataCheckString = [...params.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
-
-    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(config.BOT_TOKEN).digest();
-    const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-
-    if (hash !== expectedHash) return null;
-
-    const user = JSON.parse(params.get('user') || '{}');
-    return user;
-  } catch { return null; }
+    const params = new URLSearchParams(tgDataStr);
+    const userStr = params.get('user');
+    if (userStr) return JSON.parse(userStr).id;
+  } catch {}
+  return null;
 }
 
-// Middleware — extract user from initData or dev fallback
-router.use((req, res, next) => {
-  const initData = req.headers['x-telegram-init-data'] || req.query.initData || '';
+router.get('/status', (req, res) => {
+  const telegramId = getUserId(req.query.tgData);
+  if (!telegramId) return res.json({ ok: false, error: 'unauthorized' });
 
-  if (initData) {
-    const user = validateTelegramData(initData);
-    if (!user?.id) return res.status(401).json({ error: 'Invalid auth' });
-    req.tgUser = user;
-  } else if (process.env.NODE_ENV !== 'production' && req.query.dev_id) {
-    // Dev mode: pass ?dev_id=YOUR_TG_ID
-    req.tgUser = { id: parseInt(req.query.dev_id) };
+  const user = db.getUser(telegramId);
+  if (!user) return res.json({ ok: false, error: 'user_not_found' });
+
+  const activeBots = db.getAllActiveBots().filter(b => b.telegram_id === telegramId);
+  const botsWithStats = activeBots.map(b => {
+    const stats = mc.getBotStats(telegramId);
+    return { ...b, players: stats?.onlineCount ?? 0 };
+  });
+
+  res.json({ ok: true, user, bots: botsWithStats });
+});
+
+router.get('/bot/:id', (req, res) => {
+  const telegramId = getUserId(req.query.tgData);
+  if (!telegramId) return res.json({ ok: false, error: 'unauthorized' });
+
+  const botRecord = db.getBotById(req.params.id);
+  if (!botRecord) return res.json({ ok: false, error: 'not_found' });
+
+  const user = db.getUserByInternalId(botRecord.user_id);
+  if (!user || user.telegram_id !== telegramId) return res.json({ ok: false, error: 'forbidden' });
+
+  const stats = mc.getBotStats(telegramId);
+  const log = mc.getActionLog(telegramId);
+  const inst = mc.getActiveBot(telegramId);
+
+  const players = inst?.bot ? Object.values(inst.bot.players || {}).map(p => ({
+    name: p.username, ping: p.ping,
+  })) : [];
+
+  res.json({
+    ok: true,
+    bot: botRecord,
+    stats,
+    log: log.slice(0, 30),
+    players,
+    messages: inst?.chatLog || [],
+    reconnect: inst?.autoReconnect || false,
+  });
+});
+
+router.post('/bot/:id/toggle', (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+
+  const botRecord = db.getBotById(req.params.id);
+  const user = db.getUserByInternalId(botRecord?.user_id);
+  if (!user || user.telegram_id !== telegramId) return res.json({ ok: false });
+
+  const { key } = req.body;
+  let value, message;
+
+  if (key === 'afk') {
+    value = mc.toggleAntiAfk(telegramId);
+    message = value ? '🟢 Анти-АФК включён' : '🔴 Анти-АФК выключен';
+  } else if (key === 'chat') {
+    value = mc.toggleChatBridge(telegramId);
+    message = value ? '💬 Чат-мост включён' : '💬 Чат-мост выключен';
+  } else if (key === 'reconnect') {
+    const inst = mc.getActiveBot(telegramId);
+    if (inst) { inst.autoReconnect = !inst.autoReconnect; value = inst.autoReconnect; }
+    message = value ? '🔁 Авто-реконнект включён' : '🔁 Авто-реконнект выключен';
+  }
+
+  res.json({ ok: true, value, message });
+});
+
+router.post('/bot/:id/op', async (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  const ok = await mc.setCreative(telegramId);
+  res.json({ ok });
+});
+
+router.post('/bot/:id/move', (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  const { dir } = req.body;
+  if (dir === 'stop') {
+    const inst = mc.getActiveBot(telegramId);
+    if (inst?.bot) {
+      for (const d of ['forward','back','left','right','jump','sneak']) {
+        try { inst.bot.setControlState(d, false); } catch {}
+      }
+    }
   } else {
-    return res.status(401).json({ error: 'No auth' });
+    mc.moveBot(telegramId, dir);
   }
-  next();
+  res.json({ ok: true });
 });
 
-// ─── GET /api/me — user info + bots ─────────────────────────────────────────
-router.get('/me', (req, res) => {
-  const userId = req.tgUser.id;
-  const user = db.getUser(userId);
-  if (!user) return res.json({ user: null, bots: [] });
-
-  const activeBots = mc.getActiveBotsForUser(userId);
-  const bots = activeBots.map(inst => {
-    const stats = mc.getBotStats(inst.botId);
-    const rec = db.getBotById(inst.botId);
-    return {
-      botId: inst.botId,
-      username: inst.bot?.username || rec?.mc_username || '?',
-      server: rec ? `${rec.server_host}:${rec.server_port}` : '?',
-      version: rec?.mc_version || '?',
-      status: 'online',
-      health: stats?.health ?? 0,
-      food: stats?.food ?? 0,
-      gamemode: stats?.gamemode ?? '?',
-      uptimeH: stats?.uptimeH ?? 0,
-      uptimeM: stats?.uptimeM ?? 0,
-      totalH: stats?.totalH ?? 0,
-      totalM: stats?.totalM ?? 0,
-      worldTime: stats?.worldTime ?? '?',
-      onlineCount: stats?.onlineCount ?? 0,
-      opGranted: stats?.opGranted ?? false,
-      antiAfkEnabled: stats?.antiAfkEnabled ?? true,
-      autoReconnect: stats?.autoReconnect ?? true,
-      noAds: stats?.noAds ?? false,
-      chatBridgeEnabled: stats?.chatBridgeEnabled ?? false,
-      avatarUrl: `https://crafatar.com/avatars/${encodeURIComponent(inst.bot?.username || '?')}?size=64&overlay=true`,
-    };
-  });
-
-  const { isPremium, isEternal } = require('./helpers');
-  res.json({
-    user: {
-      id: user.telegram_id,
-      username: user.username,
-      premiumType: user.premium_type,
-      premiumExpires: user.premium_expires,
-      isPremium: isPremium(user),
-      isEternal: isEternal(user),
-    },
-    bots,
-  });
+router.post('/bot/:id/follow', async (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  const ok = await mc.followPlayer(telegramId, req.body.player);
+  res.json({ ok });
 });
 
-// ─── GET /api/bot/:botId/players ─────────────────────────────────────────────
-router.get('/bot/:botId/players', (req, res) => {
-  const botId = parseInt(req.params.botId);
-  const inst = mc.getActiveBotByBotId(botId);
-  if (!inst || inst.userId !== req.tgUser.id) return res.status(403).json({ error: 'Access denied' });
-
-  const players = mc.getOnlinePlayers(botId) || [];
-  res.json({
-    players: players.map(nick => ({
-      nick,
-      avatarUrl: `https://crafatar.com/avatars/${encodeURIComponent(nick)}?size=64&overlay=true`,
-    })),
-  });
+router.post('/bot/:id/follow/stop', (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  mc.stopFollow(telegramId);
+  res.json({ ok: true });
 });
 
-// ─── GET /api/bot/:botId/log ──────────────────────────────────────────────────
-router.get('/bot/:botId/log', (req, res) => {
-  const botId = parseInt(req.params.botId);
-  const inst = mc.getActiveBotByBotId(botId);
-  if (!inst || inst.userId !== req.tgUser.id) return res.status(403).json({ error: 'Access denied' });
-
-  res.json({ log: mc.getActionLog(botId).slice(0, 50) });
+router.get('/bot/:id/chat', (req, res) => {
+  const telegramId = getUserId(req.query.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  const inst = mc.getActiveBot(telegramId);
+  res.json({ ok: true, messages: inst?.chatLog || [] });
 });
 
-// ─── GET /api/bot/:botId/chat ─────────────────────────────────────────────────
-router.get('/bot/:botId/chat', (req, res) => {
-  const botId = parseInt(req.params.botId);
-  const inst = mc.getActiveBotByBotId(botId);
-  if (!inst || inst.userId !== req.tgUser.id) return res.status(403).json({ error: 'Access denied' });
-
-  res.json({ messages: mc.getChatLog(botId).slice(0, 30) });
+router.post('/bot/:id/chat', (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  const ok = mc.sendChatToMC(telegramId, req.body.message);
+  res.json({ ok });
 });
 
-// ─── POST /api/bot/:botId/action ──────────────────────────────────────────────
-router.post('/bot/:botId/action', express.json(), async (req, res) => {
-  const botId = parseInt(req.params.botId);
-  const inst = mc.getActiveBotByBotId(botId);
-  if (!inst || inst.userId !== req.tgUser.id) return res.status(403).json({ error: 'Access denied' });
-
-  const { action, value } = req.body;
-
-  switch (action) {
-    case 'toggle_afk': {
-      const result = mc.toggleAntiAfk(botId);
-      return res.json({ ok: true, value: result });
-    }
-    case 'toggle_reconnect': {
-      const result = mc.toggleAutoReconnect(botId);
-      return res.json({ ok: true, value: result });
-    }
-    case 'toggle_ads': {
-      const result = mc.toggleNoAds(botId);
-      return res.json({ ok: true, value: result });
-    }
-    case 'toggle_chat': {
-      const result = mc.toggleChatBridge(botId);
-      return res.json({ ok: true, value: result });
-    }
-    case 'set_creative': {
-      const ok = await mc.setCreative(botId);
-      return res.json({ ok });
-    }
-    case 'send_chat': {
-      if (!value) return res.status(400).json({ error: 'No message' });
-      const ok = mc.sendChatToMC(botId, String(value).slice(0, 256));
-      return res.json({ ok });
-    }
-    case 'move': {
-      const dirs = ['forward', 'back', 'left', 'right', 'jump', 'sneak'];
-      if (!dirs.includes(value)) return res.status(400).json({ error: 'Bad direction' });
-      const ok = mc.moveBot(botId, value);
-      return res.json({ ok });
-    }
-    case 'disconnect': {
-      await mc.disconnectBotById(botId);
-      return res.json({ ok: true });
-    }
-    default:
-      return res.status(400).json({ error: 'Unknown action' });
-  }
+router.post('/bot/:id/disconnect', async (req, res) => {
+  const telegramId = getUserId(req.body.tgData);
+  if (!telegramId) return res.json({ ok: false });
+  await mc.disconnectBot(telegramId);
+  res.json({ ok: true });
 });
 
 module.exports = router;
