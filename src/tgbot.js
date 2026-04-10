@@ -127,13 +127,12 @@ bot.start(async (ctx) => {
     }
   }
   const bots = mc.getActiveBotsForUser(ctx.from.id);
-  const webUrl = getWebAppUrl();
-  const startKb = webUrl
-    ? { ...kb.mainMenu(bots.length, isPremium(db.getUser(ctx.from.id))), inline_keyboard: [
-        [Markup.button.webApp('🎮 Открыть панель', webUrl)],
-        ...kb.mainMenu(bots.length, isPremium(db.getUser(ctx.from.id))).reply_markup.inline_keyboard
-      ]}
-    : userMenu(ctx.from.id);
+  const _domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
+  const _webUrl = _domain ? (_domain.startsWith('http') ? _domain : `https://${_domain}`) : '';
+  const _baseKb = kb.mainMenu(bots.length, isPremium(db.getUser(ctx.from.id)));
+  const startKb = _webUrl
+    ? { reply_markup: { inline_keyboard: [[{ text: '🎮 Открыть панель', web_app: { url: _webUrl } }], ..._baseKb.reply_markup.inline_keyboard] } }
+    : _baseKb;
   await ctx.reply(
     `👋 *Привет!*\n\nЯ *WHMineBot* — держу твой Minecraft-сервер живым 24/7.\n\n🆓 Бесплатно: 1 бот, до 7 дней\n💎 Premium: несколько ботов, всегда онлайн + WASD, чат-мост, свой ник`,
     { parse_mode:'Markdown', ...userMenu(ctx.from.id) }
@@ -149,6 +148,20 @@ bot.action('check_sub', async (ctx) => {
   } else {
     await ctx.answerCbQuery('❌ Ты ещё не подписался!', { show_alert: true });
   }
+});
+
+
+// ─── /webapp — открыть Mini App ──────────────────────────────────────────────
+bot.command('webapp', async (ctx) => {
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
+  if (!domain) return ctx.reply('⚠️ Mini App не настроен. Обратись к администратору.');
+  const url = domain.startsWith('http') ? domain : `https://${domain}`;
+  await ctx.reply('🎮 *WHMineBot Panel*\n\nОткрой панель управления ботами:', {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [[{ text: '🎮 Открыть панель', web_app: { url } }]]
+    }
+  });
 });
 
 // ─── /admin ────────────────────────────────────────────────────────────────────
@@ -1246,4 +1259,20 @@ bot.action(/^players_(\d+)$/, async (ctx) => {
       [Markup.button.callback('◀️ Назад в панель', `bot_panel_${botId}`)],
     ]),
   });
+});
+
+// ─── /setmenu — admin command to (re)set Mini App menu button ────────────────
+bot.command('setmenu', async (ctx) => {
+  if (ctx.from.id !== config.ADMIN_ID) return;
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
+  if (!domain) return ctx.reply('❌ RAILWAY_PUBLIC_DOMAIN не задан в Variables.');
+  const url = domain.startsWith('http') ? domain : `https://${domain}`;
+  try {
+    await ctx.telegram.setChatMenuButton({
+      menu_button: { type: 'web_app', text: '🎮 Панель', web_app: { url } }
+    });
+    await ctx.reply(`✅ Кнопка меню установлена!\n\nURL: ${url}\n\nПерезапусти диалог с ботом — кнопка появится снизу слева.`);
+  } catch (e) {
+    await ctx.reply(`❌ Ошибка: ${e.message}`);
+  }
 });
