@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const config = require('./src/config');
 const db = require('./src/db');
@@ -7,23 +8,22 @@ if (!config.BOT_TOKEN) { console.error('❌ BOT_TOKEN не задан!'); proces
 if (!config.ADMIN_ID)  { console.error('❌ ADMIN_ID не задан!');  process.exit(1); }
 
 const app = express();
-app.get('/', (_, res) => res.json({ service: 'WHMineBot', status: 'running', uptime: Math.floor(process.uptime()) }));
+
+// ─── Static files FIRST — index.html отдаётся на GET / ───────────────────────
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ─── Health check (не перекрывает /) ─────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ ok: true }));
-
-// Serve Mini App static files
-app.use(express.static(require('path').join(__dirname, 'public')));
-
-// API routes (mounted after db is ready — see below)
+app.get('/status', (_, res) => res.json({ service: 'WHMineBot', status: 'running', uptime: Math.floor(process.uptime()) }));
 
 app.listen(config.PORT, () => console.log(`🌐 HTTP слушает порт ${config.PORT}`));
 
+// ─── DB ready → mount API + start bot ────────────────────────────────────────
 db.ready.then(() => {
   console.log('💾 База данных готова');
 
-  // Mount API router
   const apiRouter = require('./src/api');
   app.use('/api', apiRouter);
-
 
   const bot = require('./src/tgbot');
   const { startScheduler } = require('./src/scheduler');
@@ -44,19 +44,19 @@ db.ready.then(() => {
         const webUrl = webDomain.startsWith('http') ? webDomain : `https://${webDomain}`;
         bot.telegram.setChatMenuButton({
           menu_button: { type: 'web_app', text: '🎮 Панель', web_app: { url: webUrl } }
-        }).catch(() => {});
-        console.log('🌐 Mini App:', webUrl);
+        }).catch(e => console.error('Menu button error:', e.message));
+        console.log('🌐 Mini App URL:', webUrl);
       } else {
-        console.log('⚠️  RAILWAY_PUBLIC_DOMAIN не задан — Mini App кнопка не установлена');
+        console.log('⚠️  RAILWAY_PUBLIC_DOMAIN не задан — добавь его в Variables на Railway');
       }
+
       console.log(`👑 Admin ID: ${config.ADMIN_ID}`);
       console.log(`🔄 Авто-реконнект: ${config.AUTO_RECONNECT_MINUTES} мин`);
       console.log(`💳 CryptoBot: ${config.CRYPTOBOT_TOKEN ? '✅' : '❌'}`);
       console.log(`💳 Карта BY:  ${config.CARD_NUMBER ? '✅' : '❌'}`);
 
-      // Запускаем планировщик после старта бота
       startScheduler(bot);
-      console.log('⏰ Планировщик уведомлений запущен');
+      console.log('⏰ Планировщик запущен');
     })
     .catch(err => { console.error('❌ Ошибка запуска:', err.message); process.exit(1); });
 
