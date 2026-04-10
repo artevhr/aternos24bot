@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WHMineBot</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rubik:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #0e0e14;
+  --bg2: #16161f;
+  --bg3: #1e1e2a;
+  --accent: #00ff88;
+  --accent2: #00c8ff;
+  --red: #ff4455;
+  --yellow: #ffcc00;
+  --text: #e8e8f0;
+  --muted: #6b6b80;
+  --border: rgba(255,255,255,0.07);
+  --radius: 14px;
+  --font: 'Rubik', sans-serif;
+  --mono: 'Space Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── LOADING ── */
+#loading {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; flex-direction: column; gap: 16px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── SCREENS ── */
+.screen { display: none; }
+.screen.active { display: block; animation: fadeIn .2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-back {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--bg3); border: none; color: var(--text);
+  cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.header-back:active { background: var(--bg2); }
+.header-title { font-size: 15px; font-weight: 600; flex: 1; }
+.header-sub { font-size: 12px; color: var(--muted); }
+
+/* ── USER CARD ── */
+.user-card {
+  margin: 16px; padding: 16px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 14px;
+}
+.user-avatar {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: var(--bg2); display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.user-name { font-weight: 600; font-size: 15px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; margin-top: 4px;
+}
+.badge-free { background: rgba(107,107,128,.25); color: var(--muted); }
+.badge-monthly { background: rgba(0,200,255,.15); color: var(--accent2); }
+.badge-eternal { background: rgba(0,255,136,.15); color: var(--accent); }
+
+/* ── SECTION LABEL ── */
+.section-label {
+  padding: 8px 16px 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* ── BOT CARD ── */
+.bots-list { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.bot-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color .15s, transform .1s;
+  display: flex; align-items: center; gap: 14px;
+  position: relative; overflow: hidden;
+}
+.bot-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  opacity: 0; transition: opacity .2s;
+}
+.bot-card:active { transform: scale(.98); border-color: rgba(0,255,136,.25); }
+.bot-card:active::before { opacity: 1; }
+
+.skin-face {
+  width: 48px; height: 48px; border-radius: 8px;
+  background: var(--bg3); flex-shrink: 0;
+  image-rendering: pixelated;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.skin-face-sm {
+  width: 32px; height: 32px; border-radius: 6px;
+  background: var(--bg3); flex-shrink: 0;
+  image-rendering: pixelated;
+}
+
+.bot-info { flex: 1; min-width: 0; }
+.bot-name {
+  font-weight: 600; font-size: 14px;
+  font-family: var(--mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bot-server {
+  font-size: 12px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bot-meta { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.meta-chip {
+  font-size: 11px; padding: 2px 7px; border-radius: 10px;
+  background: var(--bg3); color: var(--muted);
+}
+.meta-chip.green { background: rgba(0,255,136,.12); color: var(--accent); }
+.meta-chip.red { background: rgba(255,68,85,.12); color: var(--red); }
+.meta-chip.blue { background: rgba(0,200,255,.12); color: var(--accent2); }
+
+.bot-arrow { color: var(--muted); font-size: 18px; flex-shrink: 0; }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center; padding: 48px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.empty-icon { font-size: 48px; }
+.empty-title { font-weight: 600; font-size: 16px; }
+.empty-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+/* ── BOT DETAIL ── */
+.detail-hero {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex; align-items: center; gap: 16px;
+}
+.detail-hero .skin-face-lg {
+  width: 72px; height: 72px; border-radius: 14px;
+  background: var(--bg3); image-rendering: pixelated;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  flex-shrink: 0;
+}
+.detail-hero-info { flex: 1; min-width: 0; }
+.detail-nick {
+  font-family: var(--mono); font-size: 18px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.detail-server { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.online-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  margin-right: 6px; animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ── STATS GRID ── */
+.stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; padding: 12px 12px 0;
+}
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px;
+  text-align: center;
+}
+.stat-val { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+.stat-val.green { color: var(--accent); }
+.stat-val.yellow { color: var(--yellow); }
+.stat-val.red { color: var(--red); }
+.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── TOGGLE ROW ── */
+.toggles { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.toggle-row {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; transition: border-color .15s;
+}
+.toggle-row:active { border-color: rgba(0,255,136,.2); }
+.toggle-label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.toggle-icon { font-size: 18px; width: 24px; text-align: center; }
+.toggle-switch {
+  width: 44px; height: 24px; border-radius: 12px;
+  background: var(--bg3); position: relative;
+  transition: background .2s; flex-shrink: 0;
+}
+.toggle-switch.on { background: var(--accent); }
+.toggle-switch::after {
+  content: ''; position: absolute; width: 18px; height: 18px;
+  background: white; border-radius: 50%; top: 3px; left: 3px;
+  transition: left .2s; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.toggle-switch.on::after { left: 23px; }
+
+/* ── TABS ── */
+.tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  padding: 0 12px; gap: 0;
+}
+.tab {
+  flex: 1; padding: 10px 4px; text-align: center;
+  font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+  text-transform: uppercase;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── PLAYERS LIST ── */
+.players-list { padding: 8px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.player-row {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.player-name { font-size: 14px; font-family: var(--mono); }
+
+/* ── LOG ── */
+.log-container {
+  padding: 8px 12px 16px;
+  max-height: 300px; overflow-y: auto;
+}
+.log-line {
+  font-size: 11px; font-family: var(--mono);
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+  color: var(--muted); line-height: 1.5;
+}
+.log-line.join { color: var(--accent); }
+.log-line.leave { color: var(--red); }
+.log-line.chat { color: var(--text); }
+.log-line.sys { color: var(--accent2); }
+
+/* ── CHAT ── */
+.chat-container {
+  padding: 8px 12px 8px;
+  max-height: 260px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.chat-msg {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+}
+.chat-author { font-size: 11px; color: var(--accent2); font-weight: 600; margin-bottom: 2px; }
+.chat-text { font-size: 13px; }
+.chat-input-row {
+  padding: 8px 12px 16px;
+  display: flex; gap: 8px; align-items: center;
+}
+.chat-input {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px;
+  color: var(--text); font-size: 14px; font-family: var(--font);
+  outline: none;
+}
+.chat-input:focus { border-color: rgba(0,255,136,.3); }
+
+/* ── MOVEMENT ── */
+.movement-grid {
+  padding: 12px 12px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.move-row { display: flex; gap: 4px; }
+.move-btn {
+  width: 56px; height: 56px; border-radius: 12px;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text); font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .1s, transform .1s;
+  user-select: none;
+}
+.move-btn:active { background: var(--bg3); transform: scale(.93); }
+.move-btn.accent { background: rgba(0,255,136,.1); border-color: rgba(0,255,136,.2); }
+.move-btn.empty { background: transparent; border-color: transparent; pointer-events: none; }
+.move-btn-wide {
+  width: 88px; height: 44px; border-radius: 10px;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text); font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; gap: 6px; transition: background .1s;
+}
+.move-btn-wide:active { background: var(--bg3); }
+
+/* ── DANGER BUTTON ── */
+.danger-btn {
+  margin: 12px 12px 16px;
+  width: calc(100% - 24px);
+  padding: 14px;
+  background: rgba(255,68,85,.1); border: 1px solid rgba(255,68,85,.2);
+  border-radius: var(--radius); color: var(--red);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background .15s;
+}
+.danger-btn:active { background: rgba(255,68,85,.2); }
+
+/* ── BTN ── */
+.btn {
+  padding: 12px 18px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); transition: background .15s;
+}
+.btn:active { background: var(--bg3); }
+.btn-send {
+  width: 40px; height: 40px; padding: 0;
+  background: var(--accent); border-color: var(--accent);
+  color: #000; border-radius: 10px; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.btn-send:active { opacity: .8; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--bg3); border: 1px solid var(--border);
+  padding: 10px 18px; border-radius: 20px;
+  font-size: 13px; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+  z-index: 999;
+}
+.toast.show { opacity: 1; }
+
+/* ── REFRESH BTN ── */
+.refresh-btn {
+  position: fixed; bottom: 24px; right: 16px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  z-index: 50; transition: transform .2s;
+}
+.refresh-btn.spinning { animation: spin .6s linear; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--muted)">Загрузка...</div>
+</div>
+
+<!-- SCREEN: HOME -->
+<div id="screen-home" class="screen">
+  <div id="user-card-container"></div>
+  <div class="section-label">Активные боты</div>
+  <div class="bots-list" id="bots-list"></div>
+</div>
+
+<!-- SCREEN: BOT DETAIL -->
+<div id="screen-bot" class="screen">
+  <div class="header">
+    <button class="header-back" onclick="goHome()">←</button>
+    <div>
+      <div class="header-title" id="detail-header-title">Панель бота</div>
+      <div class="header-sub" id="detail-header-sub"></div>
+    </div>
+    <button class="btn" onclick="refreshDetail()" style="padding:6px 10px;font-size:12px;">🔄</button>
+  </div>
+
+  <div id="detail-hero"></div>
+
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <div class="tabs" id="detail-tabs">
+    <div class="tab active" onclick="switchTab('controls')">Управление</div>
+    <div class="tab" onclick="switchTab('players')">Игроки</div>
+    <div class="tab" onclick="switchTab('chat')">Чат</div>
+    <div class="tab" onclick="switchTab('log')">Лог</div>
+  </div>
+
+  <!-- TAB: CONTROLS -->
+  <div class="tab-content active" id="tab-controls">
+    <div class="toggles" id="toggles-container"></div>
+    <div class="movement-grid" id="movement-grid"></div>
+    <button class="danger-btn" id="disconnect-btn" onclick="disconnectBot()">🔴 Отключить бота</button>
+  </div>
+
+  <!-- TAB: PLAYERS -->
+  <div class="tab-content" id="tab-players">
+    <div class="players-list" id="players-list"></div>
+  </div>
+
+  <!-- TAB: CHAT -->
+  <div class="tab-content" id="tab-chat">
+    <div class="chat-container" id="chat-messages"></div>
+    <div class="chat-input-row" id="chat-input-row" style="display:none">
+      <input class="chat-input" id="chat-input" placeholder="Написать в чат MC..." maxlength="256">
+      <div class="btn-send" onclick="sendChat()">➤</div>
+    </div>
+  </div>
+
+  <!-- TAB: LOG -->
+  <div class="tab-content" id="tab-log">
+    <div class="log-container" id="log-container"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// ── State ──────────────────────────────────────────────────────────────────
+let state = { user: null, bots: [], currentBotId: null, currentTab: 'controls' };
+
+// ── Init ───────────────────────────────────────────────────────────────────
+const initData = tg?.initData || '';
+const devId = new URLSearchParams(location.search).get('dev_id') || '';
+
+async function apiFetch(path, opts = {}) {
+  const url = path + (devId ? (path.includes('?') ? '&' : '?') + 'dev_id=' + devId : '');
+  const headers = { ...(opts.headers || {}) };
+  if (initData) headers['x-telegram-init-data'] = initData;
+  const res = await fetch(url, { ...opts, headers });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function init() {
+  try {
+    const data = await apiFetch('/api/me');
+    state.user = data.user;
+    state.bots = data.bots;
+    renderHome();
+    show('home');
+  } catch (e) {
+    document.getElementById('loading').innerHTML =
+      `<div style="text-align:center;padding:32px 24px">
+        <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+        <div style="font-weight:600;margin-bottom:8px">Ошибка загрузки</div>
+        <div style="font-size:13px;color:var(--muted)">${e.message}</div>
+      </div>`;
+  }
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function show(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('screen-' + name).classList.add('active');
+}
+function goHome() { show('home'); }
+
+// ── Render Home ────────────────────────────────────────────────────────────
+function renderHome() {
+  const u = state.user;
+  const badgeClass = u.isEternal ? 'badge-eternal' : u.isPremium ? 'badge-monthly' : 'badge-free';
+  const badgeLabel = u.isEternal ? '💎 Eternal' : u.isPremium ? '📅 Monthly' : '🆓 Free';
+
+  document.getElementById('user-card-container').innerHTML = `
+    <div class="user-card">
+      <div class="user-avatar">🎮</div>
+      <div>
+        <div class="user-name">@${u.username || 'user'}</div>
+        <div class="badge ${badgeClass}">${badgeLabel}</div>
+      </div>
+    </div>`;
+
+  const list = document.getElementById('bots-list');
+  if (!state.bots.length) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🤖</div>
+        <div class="empty-title">Нет активных ботов</div>
+        <div class="empty-sub">Подключи бота к серверу через Telegram-бот</div>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = state.bots.map(bot => `
+    <div class="bot-card" onclick="openBot(${bot.botId})">
+      <img class="skin-face" src="${bot.avatarUrl}" alt=""
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="skin-face" style="display:none;font-size:20px;align-items:center;justify-content:center">🤖</div>
+      <div class="bot-info">
+        <div class="bot-name">${bot.username}</div>
+        <div class="bot-server">${bot.server}</div>
+        <div class="bot-meta">
+          <span class="meta-chip green"><span class="online-dot"></span>онлайн</span>
+          <span class="meta-chip">v${bot.version}</span>
+          <span class="meta-chip blue">👥 ${bot.onlineCount}</span>
+          <span class="meta-chip">⏱ ${bot.uptimeH}ч ${bot.uptimeM}м</span>
+        </div>
+      </div>
+      <div class="bot-arrow">›</div>
+    </div>`).join('');
+}
+
+// ── Open Bot ───────────────────────────────────────────────────────────────
+function openBot(botId) {
+  state.currentBotId = botId;
+  state.currentTab = 'controls';
+  const bot = state.bots.find(b => b.botId === botId);
+  if (!bot) return;
+
+  document.getElementById('detail-header-title').textContent = bot.username;
+  document.getElementById('detail-header-sub').textContent = bot.server;
+
+  renderBotDetail(bot);
+  switchTab('controls');
+  show('bot');
+  loadPlayers();
+  loadLog();
+  loadChat();
+}
+
+function renderBotDetail(bot) {
+  // Hero
+  document.getElementById('detail-hero').innerHTML = `
+    <div class="detail-hero">
+      <img class="skin-face-lg" src="${bot.avatarUrl}" alt=""
+        onerror="this.textContent='🤖';this.style.fontSize='32px';this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center'">
+      <div class="detail-hero-info">
+        <div class="detail-nick">${bot.username}</div>
+        <div class="detail-server">${bot.server} · v${bot.version}</div>
+        <div style="margin-top:8px">
+          <span class="badge badge-eternal"><span class="online-dot"></span>онлайн</span>
+        </div>
+      </div>
+    </div>`;
+
+  // Stats
+  const hpColor = bot.health >= 14 ? 'green' : bot.health >= 7 ? 'yellow' : 'red';
+  const foodColor = bot.food >= 14 ? 'green' : bot.food >= 7 ? 'yellow' : 'red';
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-val ${hpColor}">${bot.health}</div>
+      <div class="stat-label">❤️ Здоровье</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val ${foodColor}">${bot.food}</div>
+      <div class="stat-label">🍗 Голод</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val blue">${bot.onlineCount}</div>
+      <div class="stat-label">👥 Игроки</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">${bot.uptimeH}ч ${bot.uptimeM}м</div>
+      <div class="stat-label">⏱ Сессия</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">${bot.totalH}ч ${bot.totalM}м</div>
+      <div class="stat-label">📊 Всего</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="font-size:13px">${bot.gamemode}</div>
+      <div class="stat-label">🎮 Режим</div>
+    </div>`;
+
+  renderToggles(bot);
+  renderMovement();
+}
+
+function renderToggles(bot) {
+  const toggles = [
+    { key: 'antiAfkEnabled', action: 'toggle_afk', icon: '🔄', label: 'Анти-АФК' },
+    { key: 'autoReconnect', action: 'toggle_reconnect', icon: '🔁', label: 'Авто-реконнект' },
+    { key: 'chatBridgeEnabled', action: 'toggle_chat', icon: '💬', label: 'Чат-мост' },
+    { key: 'noAds', action: 'toggle_ads', icon: '🔇', label: 'Без рекламы', premiumOnly: true },
+  ];
+  document.getElementById('toggles-container').innerHTML = toggles
+    .filter(t => !t.premiumOnly || state.user?.isPremium)
+    .map(t => `
+      <div class="toggle-row" onclick="doAction('${t.action}', null, this)" data-key="${t.key}">
+        <div class="toggle-label">
+          <span class="toggle-icon">${t.icon}</span> ${t.label}
+        </div>
+        <div class="toggle-switch ${bot[t.key] ? 'on' : ''}"></div>
+      </div>`).join('');
+}
+
+function renderMovement() {
+  if (!state.user?.isPremium) {
+    document.getElementById('movement-grid').innerHTML = `
+      <div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">
+        🎮 Управление движением — только для Premium
+      </div>`;
+    return;
+  }
+  document.getElementById('movement-grid').innerHTML = `
+    <div class="move-row">
+      <div class="move-btn empty"></div>
+      <div class="move-btn" onclick="move('forward')">⬆️</div>
+      <div class="move-btn empty"></div>
+    </div>
+    <div class="move-row">
+      <div class="move-btn" onclick="move('left')">⬅️</div>
+      <div class="move-btn accent" onclick="move('jump')">⎵</div>
+      <div class="move-btn" onclick="move('right')">➡️</div>
+    </div>
+    <div class="move-row">
+      <div class="move-btn empty"></div>
+      <div class="move-btn" onclick="move('back')">⬇️</div>
+      <div class="move-btn empty"></div>
+    </div>
+    <div class="move-row" style="margin-top:4px">
+      <div class="move-btn-wide" onclick="move('sneak')">⇧ Шифт</div>
+      <div class="move-btn-wide" onclick="move('jump')">⎵ Прыжок</div>
+    </div>`;
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  state.currentTab = name;
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const names = ['controls', 'players', 'chat', 'log'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+
+  if (name === 'players') loadPlayers();
+  if (name === 'log') loadLog();
+  if (name === 'chat') loadChat();
+}
+
+// ── Players ────────────────────────────────────────────────────────────────
+async function loadPlayers() {
+  if (!state.currentBotId) return;
+  try {
+    const data = await apiFetch(`/api/bot/${state.currentBotId}/players`);
+    const list = document.getElementById('players-list');
+    if (!data.players.length) {
+      list.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Никого нет</div><div class="empty-sub">На сервере нет других игроков</div></div>`;
+      return;
+    }
+    list.innerHTML = data.players.map(p => `
+      <div class="player-row">
+        <img class="skin-face-sm" src="${p.avatarUrl}" alt=""
+          onerror="this.textContent='👤';this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center'">
+        <div class="player-name">${p.nick}</div>
+      </div>`).join('');
+  } catch {}
+}
+
+// ── Log ────────────────────────────────────────────────────────────────────
+async function loadLog() {
+  if (!state.currentBotId) return;
+  try {
+    const data = await apiFetch(`/api/bot/${state.currentBotId}/log`);
+    const container = document.getElementById('log-container');
+    if (!data.log.length) {
+      container.innerHTML = `<div class="empty"><div class="empty-icon">📜</div><div class="empty-title">Лог пуст</div></div>`;
+      return;
+    }
+    container.innerHTML = data.log.map(line => {
+      let cls = '';
+      if (line.includes('➕')) cls = 'join';
+      else if (line.includes('➖')) cls = 'leave';
+      else if (line.includes('[chat]')) cls = 'chat';
+      else if (line.includes('✅') || line.includes('👑') || line.includes('🔐')) cls = 'sys';
+      return `<div class="log-line ${cls}">${escHtml(line)}</div>`;
+    }).join('');
+  } catch {}
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+async function loadChat() {
+  if (!state.currentBotId) return;
+  try {
+    const data = await apiFetch(`/api/bot/${state.currentBotId}/chat`);
+    const container = document.getElementById('chat-messages');
+    const bot = state.bots.find(b => b.botId === state.currentBotId);
+    const isPrem = state.user?.isPremium;
+
+    document.getElementById('chat-input-row').style.display = isPrem ? 'flex' : 'none';
+
+    if (!data.messages.length) {
+      container.innerHTML = `<div class="empty"><div class="empty-icon">💬</div><div class="empty-title">Нет сообщений</div><div class="empty-sub">Сообщения из чата сервера появятся здесь</div></div>`;
+      return;
+    }
+    container.innerHTML = data.messages.map(m => `
+      <div class="chat-msg">
+        <div class="chat-author">${escHtml(m.playerName)}</div>
+        <div class="chat-text">${escHtml(m.message)}</div>
+      </div>`).join('');
+    container.scrollTop = container.scrollHeight;
+  } catch {}
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !state.currentBotId) return;
+  input.value = '';
+  try {
+    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'send_chat', value: msg }),
+    });
+    showToast('✅ Отправлено');
+    setTimeout(loadChat, 500);
+  } catch { showToast('❌ Ошибка'); }
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendChat();
+});
+
+// ── Actions ────────────────────────────────────────────────────────────────
+async function doAction(action, value, el) {
+  if (!state.currentBotId) return;
+  try {
+    const data = await apiFetch(`/api/bot/${state.currentBotId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, value }),
+    });
+    // Update toggle
+    if (el && data.value !== undefined) {
+      const sw = el.querySelector('.toggle-switch');
+      if (sw) sw.classList.toggle('on', data.value);
+      // Update state
+      const bot = state.bots.find(b => b.botId === state.currentBotId);
+      if (bot) {
+        const keyMap = {
+          toggle_afk: 'antiAfkEnabled',
+          toggle_reconnect: 'autoReconnect',
+          toggle_chat: 'chatBridgeEnabled',
+          toggle_ads: 'noAds',
+        };
+        if (keyMap[action]) bot[keyMap[action]] = data.value;
+      }
+    }
+    tg?.HapticFeedback?.impactOccurred('light');
+    showToast('✅ Готово');
+  } catch (e) { showToast('❌ Ошибка'); }
+}
+
+async function move(dir) {
+  if (!state.currentBotId) return;
+  try {
+    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'move', value: dir }),
+    });
+    tg?.HapticFeedback?.impactOccurred('light');
+  } catch {}
+}
+
+async function disconnectBot() {
+  if (!state.currentBotId) return;
+  if (!confirm('Отключить бота от сервера?')) return;
+  try {
+    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'disconnect' }),
+    });
+    showToast('✅ Бот отключён');
+    tg?.HapticFeedback?.notificationOccurred('success');
+    state.bots = state.bots.filter(b => b.botId !== state.currentBotId);
+    state.currentBotId = null;
+    setTimeout(() => { renderHome(); goHome(); }, 800);
+  } catch { showToast('❌ Ошибка'); }
+}
+
+async function refreshDetail() {
+  try {
+    const data = await apiFetch('/api/me');
+    state.bots = data.bots;
+    const bot = state.bots.find(b => b.botId === state.currentBotId);
+    if (!bot) { goHome(); return; }
+    renderBotDetail(bot);
+    if (state.currentTab === 'players') loadPlayers();
+    if (state.currentTab === 'log') loadLog();
+    if (state.currentTab === 'chat') loadChat();
+    showToast('🔄 Обновлено');
+  } catch { showToast('❌ Ошибка'); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Start ──────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
