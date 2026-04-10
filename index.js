@@ -9,10 +9,21 @@ if (!config.ADMIN_ID)  { console.error('❌ ADMIN_ID не задан!');  proces
 const app = express();
 app.get('/', (_, res) => res.json({ service: 'WHMineBot', status: 'running', uptime: Math.floor(process.uptime()) }));
 app.get('/health', (_, res) => res.json({ ok: true }));
+
+// Serve Mini App static files
+app.use(express.static(require('path').join(__dirname, 'public')));
+
+// API routes (mounted after db is ready — see below)
+
 app.listen(config.PORT, () => console.log(`🌐 HTTP слушает порт ${config.PORT}`));
 
 db.ready.then(() => {
   console.log('💾 База данных готова');
+
+  // Mount API router
+  const apiRouter = require('./src/api');
+  app.use('/api', apiRouter);
+
 
   const bot = require('./src/tgbot');
   const { startScheduler } = require('./src/scheduler');
@@ -26,6 +37,18 @@ db.ready.then(() => {
   bot.launch({ dropPendingUpdates: true })
     .then(() => {
       console.log('🤖 WHMineBot запущен!');
+
+      // Set Mini App menu button
+      const webDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
+      if (webDomain) {
+        const webUrl = webDomain.startsWith('http') ? webDomain : `https://${webDomain}`;
+        bot.telegram.setChatMenuButton({
+          menu_button: { type: 'web_app', text: '🎮 Панель', web_app: { url: webUrl } }
+        }).catch(() => {});
+        console.log('🌐 Mini App:', webUrl);
+      } else {
+        console.log('⚠️  RAILWAY_PUBLIC_DOMAIN не задан — Mini App кнопка не установлена');
+      }
       console.log(`👑 Admin ID: ${config.ADMIN_ID}`);
       console.log(`🔄 Авто-реконнект: ${config.AUTO_RECONNECT_MINUTES} мин`);
       console.log(`💳 CryptoBot: ${config.CRYPTOBOT_TOKEN ? '✅' : '❌'}`);
