@@ -2,837 +2,698 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>WHMineBot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>WH Minebot</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rubik:wght@400;500;600;700&display=swap');
+:root{
+  --bg:#0a0a0f;--card:#13131a;--card2:#1a1a24;--card3:#20202d;
+  --border:#252535;--accent:#00e676;--accent-dim:rgba(0,230,118,.12);
+  --red:#ff5252;--red-dim:rgba(255,82,82,.12);
+  --yellow:#ffd740;--blue:#448aff;
+  --text:#eeeef8;--text2:#9898b8;--muted:#55556a;
+  --radius:16px;--radius-sm:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito',sans-serif;overflow-x:hidden;padding-bottom:env(safe-area-inset-bottom)}
+body{overscroll-behavior:none}
 
-:root {
-  --bg: #0e0e14;
-  --bg2: #16161f;
-  --bg3: #1e1e2a;
-  --accent: #00ff88;
-  --accent2: #00c8ff;
-  --red: #ff4455;
-  --yellow: #ffcc00;
-  --text: #e8e8f0;
-  --muted: #6b6b80;
-  --border: rgba(255,255,255,0.07);
-  --radius: 14px;
-  --font: 'Rubik', sans-serif;
-  --mono: 'Space Mono', monospace;
-}
+#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:9999;transition:opacity .35s ease}
+#loader.out{opacity:0;pointer-events:none}
+.ld-logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,#1a2a1a,#0d1f18);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;animation:ld-pulse 1.5s ease-in-out infinite}
+@keyframes ld-pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(0,230,118,.3)}50%{transform:scale(1.06);box-shadow:0 0 0 14px rgba(0,230,118,0)}}
+.ld-dots{display:flex;gap:7px}
+.ld-dots i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:ld-dot 1.3s ease-in-out infinite}
+.ld-dots i:nth-child(2){animation-delay:.18s}
+.ld-dots i:nth-child(3){animation-delay:.36s}
+@keyframes ld-dot{0%,80%,100%{transform:scale(.3);opacity:.3}40%{transform:scale(1);opacity:1}}
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+.screen{display:none;min-height:100dvh;flex-direction:column;animation:scr-in .28s ease}
+.screen.active{display:flex}
+@keyframes scr-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
-html, body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
+.scroll-area{flex:1;overflow-y:auto;padding:14px 14px 88px;display:flex;flex-direction:column;gap:12px}
+.scroll-area::-webkit-scrollbar{display:none}
 
-/* ── LOADING ── */
-#loading {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 100vh; flex-direction: column; gap: 16px;
-}
-.spinner {
-  width: 36px; height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+.section-label{font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;padding:4px 2px 2px}
 
-/* ── SCREENS ── */
-.screen { display: none; }
-.screen.active { display: block; animation: fadeIn .2s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.profile-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
+.profile-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(0,230,118,.05),transparent);pointer-events:none}
+.user-avatar{width:58px;height:58px;border-radius:16px;background:var(--card2);border:1.5px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.user-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.user-avatar .fallback{font-size:24px;font-weight:800;color:var(--accent)}
+.profile-info{flex:1;min-width:0}
+.profile-name{font-size:18px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plan-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;margin-top:5px}
+.plan-eternal{background:rgba(0,188,212,.16);color:#00e5ff;border:1px solid rgba(0,188,212,.22)}
+.plan-monthly{background:rgba(76,175,80,.16);color:#69f0ae;border:1px solid rgba(76,175,80,.22)}
+.plan-free{background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border)}
+.upgrade-btn{margin-top:10px;width:100%;padding:10px;border-radius:var(--radius-sm);background:linear-gradient(135deg,#7c4dff,#448aff);border:none;color:#fff;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:opacity .15s,transform .12s}
+.upgrade-btn:active{opacity:.85;transform:scale(.98)}
 
-/* ── HEADER ── */
-.header {
-  position: sticky; top: 0; z-index: 100;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex; align-items: center; gap: 12px;
-}
-.header-back {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: var(--bg3); border: none; color: var(--text);
-  cursor: pointer; font-size: 16px;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s;
-}
-.header-back:active { background: var(--bg2); }
-.header-title { font-size: 15px; font-weight: 600; flex: 1; }
-.header-sub { font-size: 12px; color: var(--muted); }
+.bot-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s,transform .1s}
+.bot-item:active{background:var(--card2);transform:scale(.99)}
+.bot-avatar{width:52px;height:52px;border-radius:14px;background:var(--card2);border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.bot-info{flex:1;min-width:0}
+.bot-name{font-size:16px;font-weight:800;letter-spacing:-.2px}
+.bot-server{font-size:12px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bot-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.tag-online{background:rgba(0,230,118,.13);color:#00e676;border:1px solid rgba(0,230,118,.2)}
+.tag-ver{background:var(--card3);color:var(--text2);border:1px solid var(--border)}
+.tag-info{background:var(--card3);color:var(--text);border:1px solid var(--border)}
+.dot{width:6px;height:6px;border-radius:50%;background:#00e676;display:inline-block;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.bot-arrow{color:var(--muted);font-size:20px;flex-shrink:0}
+.empty-bots{text-align:center;padding:32px 16px;color:var(--muted);font-size:14px;font-weight:600;line-height:1.6}
 
-/* ── USER CARD ── */
-.user-card {
-  margin: 16px; padding: 16px;
-  background: var(--bg3);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  display: flex; align-items: center; gap: 14px;
-}
-.user-avatar {
-  width: 48px; height: 48px; border-radius: 12px;
-  background: var(--bg2); display: flex; align-items: center; justify-content: center;
-  font-size: 22px; flex-shrink: 0;
-}
-.user-name { font-weight: 600; font-size: 15px; }
-.badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px; border-radius: 20px;
-  font-size: 11px; font-weight: 600; margin-top: 4px;
-}
-.badge-free { background: rgba(107,107,128,.25); color: var(--muted); }
-.badge-monthly { background: rgba(0,200,255,.15); color: var(--accent2); }
-.badge-eternal { background: rgba(0,255,136,.15); color: var(--accent); }
+#detail-header{padding:12px 14px 0;display:flex;align-items:center;gap:10px}
+.icon-btn{width:38px;height:38px;border-radius:12px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s;flex-shrink:0}
+.icon-btn:active{background:var(--card3)}
+.header-info{flex:1;min-width:0}
+.header-name{font-size:16px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-server{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ── SECTION LABEL ── */
-.section-label {
-  padding: 8px 16px 4px;
-  font-size: 11px; font-weight: 600; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--muted);
-}
+.bot-hero{padding:0 14px;display:flex;align-items:center;gap:14px}
+.bot-hero-av{width:80px;height:80px;border-radius:20px;background:var(--card2);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bot-hero-info{flex:1}
+.bot-hero-name{font-size:22px;font-weight:900;letter-spacing:-.4px}
+.bot-hero-sub{font-size:12px;color:var(--text2);margin-top:2px;font-family:'JetBrains Mono',monospace;word-break:break-all}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800;margin-top:8px;background:rgba(0,230,118,.12);color:#00e676;border:1px solid rgba(0,230,118,.2)}
+.status-pill.off{background:var(--red-dim);color:var(--red);border-color:rgba(255,82,82,.2)}
 
-/* ── BOT CARD ── */
-.bots-list { padding: 0 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 14px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 10px;display:flex;flex-direction:column;gap:4px}
+.stat-val{font-size:22px;font-weight:900;letter-spacing:-.5px;font-family:'JetBrains Mono',monospace}
+.sv-green{color:#00e676}.sv-yellow{color:#ffd740}.sv-red{color:#ff5252}.sv-white{color:var(--text)}
+.sv-sm{font-size:14px}
+.stat-label{font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 
-.bot-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px;
-  cursor: pointer;
-  transition: border-color .15s, transform .1s;
-  display: flex; align-items: center; gap: 14px;
-  position: relative; overflow: hidden;
-}
-.bot-card::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  opacity: 0; transition: opacity .2s;
-}
-.bot-card:active { transform: scale(.98); border-color: rgba(0,255,136,.25); }
-.bot-card:active::before { opacity: 1; }
+.tabs-wrap{padding:0 14px;background:var(--bg);z-index:10;padding-top:4px}
+.tabs{display:flex;border-bottom:1.5px solid var(--border)}
+.tab-btn{flex:1;padding:10px 2px;font-family:'Nunito',sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 
-.skin-face {
-  width: 48px; height: 48px; border-radius: 8px;
-  background: var(--bg3); flex-shrink: 0;
-  image-rendering: pixelated;
-  box-shadow: 0 2px 8px rgba(0,0,0,.4);
-}
-.skin-face-sm {
-  width: 32px; height: 32px; border-radius: 6px;
-  background: var(--bg3); flex-shrink: 0;
-  image-rendering: pixelated;
-}
+.tab-panel{display:none;flex-direction:column;gap:10px;padding:14px 14px 20px}
+.tab-panel.active{display:flex}
 
-.bot-info { flex: 1; min-width: 0; }
-.bot-name {
-  font-weight: 600; font-size: 14px;
-  font-family: var(--mono);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.bot-server {
-  font-size: 12px; color: var(--muted); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.bot-meta { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-.meta-chip {
-  font-size: 11px; padding: 2px 7px; border-radius: 10px;
-  background: var(--bg3); color: var(--muted);
-}
-.meta-chip.green { background: rgba(0,255,136,.12); color: var(--accent); }
-.meta-chip.red { background: rgba(255,68,85,.12); color: var(--red); }
-.meta-chip.blue { background: rgba(0,200,255,.12); color: var(--accent2); }
+.toggle-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
+.toggle-row:active{background:var(--card2)}
+.t-icon{width:36px;height:36px;border-radius:10px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.t-label{flex:1;font-size:15px;font-weight:700}
+.t-sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
 
-.bot-arrow { color: var(--muted); font-size: 18px; flex-shrink: 0; }
+.ios-toggle{position:relative;width:50px;height:30px;flex-shrink:0}
+.ios-toggle input{opacity:0;width:0;height:0}
+.ios-slider{position:absolute;inset:0;border-radius:15px;background:var(--card3);transition:.25s;cursor:pointer;border:1.5px solid var(--border)}
+.ios-slider:before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;left:3px;top:50%;transform:translateY(-50%);background:#fff;transition:.25s;box-shadow:0 2px 4px rgba(0,0,0,.4)}
+input:checked+.ios-slider{background:var(--accent);border-color:var(--accent)}
+input:checked+.ios-slider:before{transform:translateY(-50%) translateX(20px)}
 
-/* ── EMPTY STATE ── */
-.empty {
-  text-align: center; padding: 48px 24px;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-}
-.empty-icon { font-size: 48px; }
-.empty-title { font-weight: 600; font-size: 16px; }
-.empty-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.op-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px}
+.op-title{font-size:14px;font-weight:800;margin-bottom:6px}
+.op-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px}
+.op-cmd{font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
+.op-cmd:active{background:var(--card3)}
+.op-granted{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.2);border-radius:10px;margin-top:10px;font-size:13px;font-weight:700;color:#00e676}
+.op-btn{margin-top:10px;width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#ffd740,#ff9100);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:opacity .12s}
+.op-btn:active{opacity:.8}
 
-/* ── BOT DETAIL ── */
-.detail-hero {
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  padding: 20px 16px;
-  display: flex; align-items: center; gap: 16px;
-}
-.detail-hero .skin-face-lg {
-  width: 72px; height: 72px; border-radius: 14px;
-  background: var(--bg3); image-rendering: pixelated;
-  box-shadow: 0 4px 16px rgba(0,0,0,.5);
-  flex-shrink: 0;
-}
-.detail-hero-info { flex: 1; min-width: 0; }
-.detail-nick {
-  font-family: var(--mono); font-size: 18px; font-weight: 700;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.detail-server { font-size: 13px; color: var(--muted); margin-top: 4px; }
-.online-dot {
-  display: inline-block; width: 8px; height: 8px;
-  border-radius: 50%; background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  margin-right: 6px; animation: pulse 2s infinite;
-}
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+.move-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;max-width:230px;margin:0 auto}
+.mv-btn{aspect-ratio:1;border-radius:12px;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;user-select:none;transition:background .1s,transform .1s,border-color .1s}
+.mv-btn:active,.mv-btn.pr{background:var(--accent-dim);border-color:var(--accent);transform:scale(.93)}
+.mv-stop{background:rgba(255,82,82,.08);border-color:rgba(255,82,82,.18)}
+.mv-empty{background:transparent;border-color:transparent;pointer-events:none}
+.mv-extras{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.mv-extra{padding:13px;border-radius:12px;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:700;cursor:pointer;transition:background .1s,transform .1s}
+.mv-extra:active{background:var(--card2);transform:scale(.97)}
 
-/* ── STATS GRID ── */
-.stats-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; padding: 12px 12px 0;
-}
-.stat-card {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 12px;
-  text-align: center;
-}
-.stat-val { font-size: 18px; font-weight: 700; font-family: var(--mono); }
-.stat-val.green { color: var(--accent); }
-.stat-val.yellow { color: var(--yellow); }
-.stat-val.red { color: var(--red); }
-.stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .05em; }
+.follow-wrap{margin-top:4px}
+.follow-row{display:flex;gap:8px}
+.follow-inp{flex:1;padding:12px 14px;border-radius:10px;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
+.follow-inp:focus{border-color:var(--accent)}
+.follow-go{padding:12px 16px;border-radius:10px;background:var(--accent);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer}
+.follow-go:active{opacity:.8}
+.follow-active-row{padding:12px 14px;border-radius:10px;background:rgba(255,215,64,.08);border:1.5px solid rgba(255,215,64,.18);display:flex;align-items:center;justify-content:space-between}
+.follow-lbl{font-size:13px;font-weight:700;color:#ffd740}
+.follow-stop-btn{padding:5px 12px;border-radius:8px;background:var(--red-dim);border:1px solid rgba(255,82,82,.2);color:var(--red);font-size:12px;font-weight:700;cursor:pointer}
 
-/* ── TOGGLE ROW ── */
-.toggles { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.toggle-row {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  cursor: pointer; transition: border-color .15s;
-}
-.toggle-row:active { border-color: rgba(0,255,136,.2); }
-.toggle-label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.toggle-icon { font-size: 18px; width: 24px; text-align: center; }
-.toggle-switch {
-  width: 44px; height: 24px; border-radius: 12px;
-  background: var(--bg3); position: relative;
-  transition: background .2s; flex-shrink: 0;
-}
-.toggle-switch.on { background: var(--accent); }
-.toggle-switch::after {
-  content: ''; position: absolute; width: 18px; height: 18px;
-  background: white; border-radius: 50%; top: 3px; left: 3px;
-  transition: left .2s; box-shadow: 0 1px 4px rgba(0,0,0,.3);
-}
-.toggle-switch.on::after { left: 23px; }
+.player-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.player-name{font-size:14px;font-weight:700}
+.player-ping{font-size:12px;color:var(--muted);margin-left:auto;font-family:'JetBrains Mono',monospace}
+.no-data{text-align:center;padding:28px;color:var(--muted);font-size:14px;font-weight:600}
 
-/* ── TABS ── */
-.tabs {
-  display: flex; border-bottom: 1px solid var(--border);
-  padding: 0 12px; gap: 0;
-}
-.tab {
-  flex: 1; padding: 10px 4px; text-align: center;
-  font-size: 12px; font-weight: 600; letter-spacing: .04em;
-  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
-  transition: color .15s, border-color .15s;
-  text-transform: uppercase;
-}
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.chat-msgs{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.chat-msgs::-webkit-scrollbar{display:none}
+.chat-msg{padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border)}
+.chat-msg-hdr{display:flex;gap:8px;align-items:baseline;margin-bottom:3px}
+.chat-msg-name{font-size:12px;font-weight:800;color:var(--accent)}
+.chat-msg-time{font-size:10px;color:var(--muted)}
+.chat-msg-txt{font-size:13px;font-weight:600;line-height:1.4}
+.chat-send-row{display:flex;gap:8px;margin-top:4px}
+.chat-inp{flex:1;padding:12px 14px;border-radius:10px;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
+.chat-inp:focus{border-color:var(--accent)}
+.chat-send-btn{width:46px;height:46px;border-radius:10px;background:var(--accent);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.chat-send-btn:active{opacity:.8;transform:scale(.95)}
 
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.log-list{display:flex;flex-direction:column;gap:6px}
+.log-entry{padding:8px 12px;border-radius:8px;background:var(--card);border-left:2px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);line-height:1.5}
+.log-ok{border-left-color:#00e676}.log-err{border-left-color:#ff5252}.log-info{border-left-color:#448aff}
 
-/* ── PLAYERS LIST ── */
-.players-list { padding: 8px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
-.player-row {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 12px;
-  display: flex; align-items: center; gap: 12px;
-}
-.player-name { font-size: 14px; font-family: var(--mono); }
+.fab{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);border-radius:50px;padding:14px 32px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px;white-space:nowrap;z-index:100;border:none;transition:transform .12s,opacity .12s}
+.fab-green{background:var(--accent);color:#000;box-shadow:0 4px 24px rgba(0,230,118,.3)}
+.fab-green:active{transform:translateX(-50%) scale(.96)}
+.fab-red{background:var(--card);color:var(--red);border:1.5px solid rgba(255,82,82,.3)}
+.fab-red:active{transform:translateX(-50%) scale(.96);background:var(--red-dim)}
+.fab.hidden{display:none}
 
-/* ── LOG ── */
-.log-container {
-  padding: 8px 12px 16px;
-  max-height: 300px; overflow-y: auto;
-}
-.log-line {
-  font-size: 11px; font-family: var(--mono);
-  padding: 4px 0; border-bottom: 1px solid var(--border);
-  color: var(--muted); line-height: 1.5;
-}
-.log-line.join { color: var(--accent); }
-.log-line.leave { color: var(--red); }
-.log-line.chat { color: var(--text); }
-.log-line.sys { color: var(--accent2); }
+.toast{position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--card2);border:1px solid var(--border);border-radius:50px;padding:10px 20px;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;z-index:9998;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ── CHAT ── */
-.chat-container {
-  padding: 8px 12px 8px;
-  max-height: 260px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.chat-msg {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 10px;
-}
-.chat-author { font-size: 11px; color: var(--accent2); font-weight: 600; margin-bottom: 2px; }
-.chat-text { font-size: 13px; }
-.chat-input-row {
-  padding: 8px 12px 16px;
-  display: flex; gap: 8px; align-items: center;
-}
-.chat-input {
-  flex: 1; background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 12px;
-  color: var(--text); font-size: 14px; font-family: var(--font);
-  outline: none;
-}
-.chat-input:focus { border-color: rgba(0,255,136,.3); }
-
-/* ── MOVEMENT ── */
-.movement-grid {
-  padding: 12px 12px 0;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-}
-.move-row { display: flex; gap: 4px; }
-.move-btn {
-  width: 56px; height: 56px; border-radius: 12px;
-  background: var(--bg2); border: 1px solid var(--border);
-  color: var(--text); font-size: 22px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: background .1s, transform .1s;
-  user-select: none;
-}
-.move-btn:active { background: var(--bg3); transform: scale(.93); }
-.move-btn.accent { background: rgba(0,255,136,.1); border-color: rgba(0,255,136,.2); }
-.move-btn.empty { background: transparent; border-color: transparent; pointer-events: none; }
-.move-btn-wide {
-  width: 88px; height: 44px; border-radius: 10px;
-  background: var(--bg2); border: 1px solid var(--border);
-  color: var(--text); font-size: 13px; font-weight: 600;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; gap: 6px; transition: background .1s;
-}
-.move-btn-wide:active { background: var(--bg3); }
-
-/* ── DANGER BUTTON ── */
-.danger-btn {
-  margin: 12px 12px 16px;
-  width: calc(100% - 24px);
-  padding: 14px;
-  background: rgba(255,68,85,.1); border: 1px solid rgba(255,68,85,.2);
-  border-radius: var(--radius); color: var(--red);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: background .15s;
-}
-.danger-btn:active { background: rgba(255,68,85,.2); }
-
-/* ── BTN ── */
-.btn {
-  padding: 12px 18px; border-radius: 10px;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  border: 1px solid var(--border); background: var(--bg2);
-  color: var(--text); transition: background .15s;
-}
-.btn:active { background: var(--bg3); }
-.btn-send {
-  width: 40px; height: 40px; padding: 0;
-  background: var(--accent); border-color: var(--accent);
-  color: #000; border-radius: 10px; font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; flex-shrink: 0;
-}
-.btn-send:active { opacity: .8; }
-
-/* ── TOAST ── */
-.toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  background: var(--bg3); border: 1px solid var(--border);
-  padding: 10px 18px; border-radius: 20px;
-  font-size: 13px; white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transition: opacity .2s;
-  z-index: 999;
-}
-.toast.show { opacity: 1; }
-
-/* ── REFRESH BTN ── */
-.refresh-btn {
-  position: fixed; bottom: 24px; right: 16px;
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--bg3); border: 1px solid var(--border);
-  color: var(--text); font-size: 20px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.3);
-  z-index: 50; transition: transform .2s;
-}
-.refresh-btn.spinning { animation: spin .6s linear; }
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .5s linear infinite}
 </style>
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="loading">
-  <div class="spinner"></div>
-  <div style="font-size:13px;color:var(--muted)">Загрузка...</div>
-</div>
-
-<!-- SCREEN: HOME -->
-<div id="screen-home" class="screen">
-  <div id="user-card-container"></div>
-  <div class="section-label">Активные боты</div>
-  <div class="bots-list" id="bots-list"></div>
-</div>
-
-<!-- SCREEN: BOT DETAIL -->
-<div id="screen-bot" class="screen">
-  <div class="header">
-    <button class="header-back" onclick="goHome()">←</button>
-    <div>
-      <div class="header-title" id="detail-header-title">Панель бота</div>
-      <div class="header-sub" id="detail-header-sub"></div>
-    </div>
-    <button class="btn" onclick="refreshDetail()" style="padding:6px 10px;font-size:12px;">🔄</button>
+<div id="loader">
+  <div class="ld-logo">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+      <rect x="8" y="4" width="24" height="20" rx="6" fill="#1a3a2a"/>
+      <rect x="10" y="6" width="20" height="16" rx="5" fill="#0d2a1a"/>
+      <rect x="13" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
+      <rect x="22" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
+      <rect x="15" y="17" width="10" height="3" rx="1.5" fill="#00e676" opacity=".5"/>
+      <rect x="14" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
+      <rect x="22" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
+      <rect x="10" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
+      <rect x="26" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
+    </svg>
   </div>
-
-  <div id="detail-hero"></div>
-
-  <div class="stats-grid" id="stats-grid"></div>
-
-  <div class="tabs" id="detail-tabs">
-    <div class="tab active" onclick="switchTab('controls')">Управление</div>
-    <div class="tab" onclick="switchTab('players')">Игроки</div>
-    <div class="tab" onclick="switchTab('chat')">Чат</div>
-    <div class="tab" onclick="switchTab('log')">Лог</div>
-  </div>
-
-  <!-- TAB: CONTROLS -->
-  <div class="tab-content active" id="tab-controls">
-    <div class="toggles" id="toggles-container"></div>
-    <div class="movement-grid" id="movement-grid"></div>
-    <button class="danger-btn" id="disconnect-btn" onclick="disconnectBot()">🔴 Отключить бота</button>
-  </div>
-
-  <!-- TAB: PLAYERS -->
-  <div class="tab-content" id="tab-players">
-    <div class="players-list" id="players-list"></div>
-  </div>
-
-  <!-- TAB: CHAT -->
-  <div class="tab-content" id="tab-chat">
-    <div class="chat-container" id="chat-messages"></div>
-    <div class="chat-input-row" id="chat-input-row" style="display:none">
-      <input class="chat-input" id="chat-input" placeholder="Написать в чат MC..." maxlength="256">
-      <div class="btn-send" onclick="sendChat()">➤</div>
-    </div>
-  </div>
-
-  <!-- TAB: LOG -->
-  <div class="tab-content" id="tab-log">
-    <div class="log-container" id="log-container"></div>
-  </div>
+  <div class="ld-dots"><i></i><i></i><i></i></div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<!-- ════ SCREEN: DASH ════ -->
+<div class="screen active" id="s-dash">
+  <div class="scroll-area">
+
+    <div class="profile-card">
+      <div class="user-avatar" id="user-av">
+        <span class="fallback" id="user-fb">?</span>
+      </div>
+      <div class="profile-info">
+        <div class="profile-name" id="user-name">...</div>
+        <div class="plan-badge plan-free" id="plan-badge">🆓 Бесплатный</div>
+        <button class="upgrade-btn" id="upgrade-btn" style="display:none" onclick="upgradeClick()">⚡ Апгрейд до Eternal</button>
+      </div>
+    </div>
+
+    <div class="section-label">Активные боты</div>
+    <div id="bots-list"></div>
+
+  </div>
+  <button class="fab fab-green" id="connect-fab" onclick="connectClick()">＋ Подключить бота</button>
+</div>
+
+<!-- ════ SCREEN: DETAIL ════ -->
+<div class="screen" id="s-detail">
+
+  <div id="detail-header">
+    <div class="icon-btn" onclick="goBack()">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 14L6 9L11 4" stroke="#eeeef8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="header-info">
+      <div class="header-name" id="hdr-name">—</div>
+      <div class="header-server" id="hdr-server">—</div>
+    </div>
+    <div class="icon-btn" id="refresh-btn" onclick="doRefresh()">
+      <svg id="refresh-ico" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15 9A6 6 0 0 1 3.5 13.2M3 9a6 6 0 0 1 11.5-4.2" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round"/><path d="M15 5.5V9H11.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5V9H6.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <div class="scroll-area" style="padding-top:12px">
+
+    <div class="bot-hero">
+      <div class="bot-hero-av" id="bot-av-hero"></div>
+      <div class="bot-hero-info">
+        <div class="bot-hero-name" id="det-name">—</div>
+        <div class="bot-hero-sub" id="det-sub">—</div>
+        <div class="status-pill" id="det-pill"><span class="dot"></span> онлайн</div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val sv-green" id="st-hp">—</div><div class="stat-label">❤️ Здоровье</div></div>
+      <div class="stat-card"><div class="stat-val sv-green" id="st-fd">—</div><div class="stat-label">🍗 Голод</div></div>
+      <div class="stat-card"><div class="stat-val sv-white" id="st-pl">—</div><div class="stat-label">👥 Игроки</div></div>
+      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-up">—</div><div class="stat-label">⏱ Сессия</div></div>
+      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-wt">—</div><div class="stat-label">🌍 Время</div></div>
+      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-gm">—</div><div class="stat-label">🎮 Режим</div></div>
+    </div>
+
+    <div class="tabs-wrap">
+      <div class="tabs" id="tabs-el"></div>
+    </div>
+
+    <div class="tab-panel active" id="tab-ctrl">
+      <div class="toggle-row" onclick="toggleSetting('afk')">
+        <div class="t-icon">🔄</div>
+        <div style="flex:1"><div class="t-label">Анти-АФК</div><div class="t-sub">Случайные движения каждые ~15 сек</div></div>
+        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-afk" onchange="toggleSetting('afk')"><span class="ios-slider"></span></label>
+      </div>
+      <div class="toggle-row" onclick="toggleSetting('reconnect')">
+        <div class="t-icon">🔁</div>
+        <div style="flex:1"><div class="t-label">Авто-реконнект</div><div class="t-sub">Переподключаться при кике/разрыве</div></div>
+        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-rec" onchange="toggleSetting('reconnect')"><span class="ios-slider"></span></label>
+      </div>
+      <div class="toggle-row" id="chat-tog-row" onclick="toggleSetting('chat')">
+        <div class="t-icon">💬</div>
+        <div style="flex:1"><div class="t-label">Чат-мост</div><div class="t-sub">Пересылать чат MC ↔ Telegram</div></div>
+        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-chat" onchange="toggleSetting('chat')"><span class="ios-slider"></span></label>
+      </div>
+      <div class="op-card">
+        <div class="op-title">👑 Права оператора</div>
+        <div class="op-sub">Выдай боту ОП, чтобы он вошёл в Creative и не голодал</div>
+        <div class="op-cmd" id="op-cmd-el" onclick="copyOpCmd()">
+          <span id="op-cmd-txt">/op whminebot-?</span>
+          <span style="color:var(--muted);font-size:10px">КОПИРОВАТЬ</span>
+        </div>
+        <div id="op-granted" class="op-granted" style="display:none"><span>👑</span><span>ОП получен — бот в Creative</span></div>
+        <button class="op-btn" id="op-btn" onclick="grantOp()">✅ ОП выдан → Войти в Creative</button>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-move">
+      <div style="text-align:center"><div style="font-size:11px;font-weight:700;color:var(--muted)">Каждое нажатие = 1 блок движения</div></div>
+      <div class="move-grid">
+        <div class="mv-btn mv-empty"></div>
+        <div class="mv-btn" id="mv-f" ontouchstart="mv('forward')" ontouchend="mvStop()" onmousedown="mv('forward')" onmouseup="mvStop()">⬆️</div>
+        <div class="mv-btn mv-empty"></div>
+        <div class="mv-btn" id="mv-l" ontouchstart="mv('left')" ontouchend="mvStop()" onmousedown="mv('left')" onmouseup="mvStop()">⬅️</div>
+        <div class="mv-btn mv-stop" onclick="mvStopAll()">⏹</div>
+        <div class="mv-btn" id="mv-r" ontouchstart="mv('right')" ontouchend="mvStop()" onmousedown="mv('right')" onmouseup="mvStop()">➡️</div>
+        <div class="mv-btn mv-empty"></div>
+        <div class="mv-btn" id="mv-b" ontouchstart="mv('back')" ontouchend="mvStop()" onmousedown="mv('back')" onmouseup="mvStop()">⬇️</div>
+        <div class="mv-btn mv-empty"></div>
+      </div>
+      <div class="mv-extras">
+        <div class="mv-extra" ontouchstart="mv('jump')" ontouchend="mvStop()" onmousedown="mv('jump')" onmouseup="mvStop()">⎵ Прыжок</div>
+        <div class="mv-extra" ontouchstart="mv('sneak')" ontouchend="mvStop()" onmousedown="mv('sneak')" onmouseup="mvStop()">⇧ Шифт</div>
+      </div>
+      <div class="follow-wrap">
+        <div class="section-label" style="margin-bottom:8px">Следовать за игроком</div>
+        <div id="follow-off">
+          <div class="follow-row">
+            <input class="follow-inp" id="follow-inp" placeholder="Никнейм..." type="text">
+            <button class="follow-go" onclick="startFollow()">▶</button>
+          </div>
+        </div>
+        <div id="follow-on" style="display:none">
+          <div class="follow-active-row">
+            <div class="follow-lbl">👤 Слежка: <span id="follow-lbl"></span></div>
+            <div class="follow-stop-btn" onclick="stopFollow()">Стоп</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-pl">
+      <div id="players-list"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-chat">
+      <div class="chat-msgs" id="chat-msgs"></div>
+      <div class="chat-send-row">
+        <input class="chat-inp" id="chat-inp" placeholder="Написать в чат MC..." maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send-btn" onclick="sendChat()">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9L16 3L10 9L16 15Z" fill="#000"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-log">
+      <div class="log-list" id="log-list"></div>
+    </div>
+
+  </div>
+
+  <button class="fab fab-red" id="disc-fab" onclick="discBot()">🔴 Отключить бота</button>
+</div>
+
 <script>
-const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.enableClosingConfirmation();
+tg.setHeaderColor('#0a0a0f');
+tg.setBackgroundColor('#0a0a0f');
 
-// ── State ──────────────────────────────────────────────────────────────────
-let state = { user: null, bots: [], currentBotId: null, currentTab: 'controls' };
+let userId = null, currentBotId = null, refreshTimer = null, isPremium = false;
 
-// ── Init ───────────────────────────────────────────────────────────────────
-const initData = tg?.initData || '';
-const devId = new URLSearchParams(location.search).get('dev_id') || '';
+const TABS = [
+  { id:'ctrl', label:'Управление' },
+  { id:'move', label:'Движение' },
+  { id:'pl',   label:'Игроки' },
+  { id:'chat', label:'Чат' },
+  { id:'log',  label:'Лог' },
+];
 
-async function apiFetch(path, opts = {}) {
-  const url = path + (devId ? (path.includes('?') ? '&' : '?') + 'dev_id=' + devId : '');
-  const headers = { ...(opts.headers || {}) };
-  if (initData) headers['x-telegram-init-data'] = initData;
-  const res = await fetch(url, { ...opts, headers });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+function buildTabs() {
+  const el = document.getElementById('tabs-el');
+  el.innerHTML = TABS.map((t,i) =>
+    `<button class="tab-btn${i===0?' active':''}" onclick="switchTab('${t.id}',this)">${t.label}</button>`
+  ).join('');
 }
+
+function robotSvg(s) {
+  return `<svg width="${s}" height="${s}" viewBox="0 0 40 40" fill="none">
+    <rect x="8" y="4" width="24" height="20" rx="6" fill="#1a3a2a"/>
+    <rect x="10" y="6" width="20" height="16" rx="5" fill="#0d2a1a"/>
+    <rect x="13" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
+    <rect x="22" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
+    <rect x="15" y="17" width="10" height="3" rx="1.5" fill="#00e676" opacity=".45"/>
+    <rect x="14" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
+    <rect x="22" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
+    <rect x="10" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
+    <rect x="26" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
+    <rect x="3" y="12" width="5" height="9" rx="2.5" fill="#1a3a2a"/>
+    <rect x="32" y="12" width="5" height="9" rx="2.5" fill="#1a3a2a"/>
+  </svg>`;
+}
+
+function td() { return tg.initData || ('dev_' + (tg.initDataUnsafe?.user?.id || 0)); }
 
 async function init() {
-  try {
-    const data = await apiFetch('/api/me');
-    state.user = data.user;
-    state.bots = data.bots;
-    renderHome();
-    show('home');
-  } catch (e) {
-    document.getElementById('loading').innerHTML =
-      `<div style="text-align:center;padding:32px 24px">
-        <div style="font-size:40px;margin-bottom:12px">⚠️</div>
-        <div style="font-weight:600;margin-bottom:8px">Ошибка загрузки</div>
-        <div style="font-size:13px;color:var(--muted)">${e.message}</div>
-      </div>`;
+  buildTabs();
+  const u = tg.initDataUnsafe?.user;
+  if (u) {
+    userId = u.id;
+    document.getElementById('user-name').textContent = '@' + (u.username || u.first_name || 'user');
+    document.getElementById('user-fb').textContent = (u.first_name || '?')[0].toUpperCase();
+    if (u.photo_url) {
+      const av = document.getElementById('user-av');
+      av.innerHTML = `<img src="${u.photo_url}" onerror="this.style.display='none'">`;
+    }
   }
+  await loadDash();
+  setTimeout(() => document.getElementById('loader').classList.add('out'), 500);
 }
 
-// ── Navigation ─────────────────────────────────────────────────────────────
-function show(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('screen-' + name).classList.add('active');
+async function loadDash() {
+  try {
+    const r = await fetch('/api/status?tgData=' + encodeURIComponent(td()));
+    const d = await r.json();
+    if (!d.ok) return;
+    const u = d.user;
+    isPremium = u.premium_type !== 'free';
+    const isEt = u.premium_type === 'eternal';
+    const isMo = u.premium_type === 'monthly' && u.premium_expires > Date.now()/1000;
+    const badge = document.getElementById('plan-badge');
+    if (isEt) {
+      badge.className = 'plan-badge plan-eternal';
+      badge.innerHTML = '💎 Eternal';
+    } else if (isMo) {
+      const exp = new Date(u.premium_expires*1000).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
+      badge.className = 'plan-badge plan-monthly';
+      badge.innerHTML = `📅 Premium до ${exp}`;
+      document.getElementById('upgrade-btn').style.display = 'block';
+    } else {
+      badge.className = 'plan-badge plan-free';
+      badge.innerHTML = '🆓 Бесплатный · 72ч';
+    }
+    renderBots(d.bots || []);
+  } catch { renderBots([]); }
 }
-function goHome() { show('home'); }
 
-// ── Render Home ────────────────────────────────────────────────────────────
-function renderHome() {
-  const u = state.user;
-  const badgeClass = u.isEternal ? 'badge-eternal' : u.isPremium ? 'badge-monthly' : 'badge-free';
-  const badgeLabel = u.isEternal ? '💎 Eternal' : u.isPremium ? '📅 Monthly' : '🆓 Free';
-
-  document.getElementById('user-card-container').innerHTML = `
-    <div class="user-card">
-      <div class="user-avatar">🎮</div>
-      <div>
-        <div class="user-name">@${u.username || 'user'}</div>
-        <div class="badge ${badgeClass}">${badgeLabel}</div>
-      </div>
-    </div>`;
-
-  const list = document.getElementById('bots-list');
-  if (!state.bots.length) {
-    list.innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">🤖</div>
-        <div class="empty-title">Нет активных ботов</div>
-        <div class="empty-sub">Подключи бота к серверу через Telegram-бот</div>
-      </div>`;
+function renderBots(bots) {
+  const el = document.getElementById('bots-list');
+  if (!bots.length) {
+    el.innerHTML = '<div class="empty-bots">Нет активных ботов<br>Нажми кнопку ниже, чтобы подключить 👇</div>';
     return;
   }
-
-  list.innerHTML = state.bots.map(bot => `
-    <div class="bot-card" onclick="openBot(${bot.botId})">
-      <img class="skin-face" src="${bot.avatarUrl}" alt=""
-        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-      <div class="skin-face" style="display:none;font-size:20px;align-items:center;justify-content:center">🤖</div>
+  el.innerHTML = bots.map(b => {
+    const up = fmtUp(b.connected_at);
+    return `<div class="bot-item" onclick="openBot(${b.id})">
+      <div class="bot-avatar">${robotSvg(34)}</div>
       <div class="bot-info">
-        <div class="bot-name">${bot.username}</div>
-        <div class="bot-server">${bot.server}</div>
-        <div class="bot-meta">
-          <span class="meta-chip green"><span class="online-dot"></span>онлайн</span>
-          <span class="meta-chip">v${bot.version}</span>
-          <span class="meta-chip blue">👥 ${bot.onlineCount}</span>
-          <span class="meta-chip">⏱ ${bot.uptimeH}ч ${bot.uptimeM}м</span>
+        <div class="bot-name">${b.mc_username}</div>
+        <div class="bot-server">${b.server_host}:${b.server_port}</div>
+        <div class="bot-tags">
+          <span class="tag tag-online"><span class="dot"></span>онлайн</span>
+          <span class="tag tag-ver">v${b.mc_version}</span>
+          <span class="tag tag-info">👥 ${b.players ?? '?'}</span>
+          <span class="tag tag-info">⏱ ${up}</span>
         </div>
       </div>
       <div class="bot-arrow">›</div>
-    </div>`).join('');
-}
-
-// ── Open Bot ───────────────────────────────────────────────────────────────
-function openBot(botId) {
-  state.currentBotId = botId;
-  state.currentTab = 'controls';
-  const bot = state.bots.find(b => b.botId === botId);
-  if (!bot) return;
-
-  document.getElementById('detail-header-title').textContent = bot.username;
-  document.getElementById('detail-header-sub').textContent = bot.server;
-
-  renderBotDetail(bot);
-  switchTab('controls');
-  show('bot');
-  loadPlayers();
-  loadLog();
-  loadChat();
-}
-
-function renderBotDetail(bot) {
-  // Hero
-  document.getElementById('detail-hero').innerHTML = `
-    <div class="detail-hero">
-      <img class="skin-face-lg" src="${bot.avatarUrl}" alt=""
-        onerror="this.textContent='🤖';this.style.fontSize='32px';this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center'">
-      <div class="detail-hero-info">
-        <div class="detail-nick">${bot.username}</div>
-        <div class="detail-server">${bot.server} · v${bot.version}</div>
-        <div style="margin-top:8px">
-          <span class="badge badge-eternal"><span class="online-dot"></span>онлайн</span>
-        </div>
-      </div>
     </div>`;
-
-  // Stats
-  const hpColor = bot.health >= 14 ? 'green' : bot.health >= 7 ? 'yellow' : 'red';
-  const foodColor = bot.food >= 14 ? 'green' : bot.food >= 7 ? 'yellow' : 'red';
-  document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-card">
-      <div class="stat-val ${hpColor}">${bot.health}</div>
-      <div class="stat-label">❤️ Здоровье</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val ${foodColor}">${bot.food}</div>
-      <div class="stat-label">🍗 Голод</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val blue">${bot.onlineCount}</div>
-      <div class="stat-label">👥 Игроки</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val">${bot.uptimeH}ч ${bot.uptimeM}м</div>
-      <div class="stat-label">⏱ Сессия</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val">${bot.totalH}ч ${bot.totalM}м</div>
-      <div class="stat-label">📊 Всего</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val" style="font-size:13px">${bot.gamemode}</div>
-      <div class="stat-label">🎮 Режим</div>
-    </div>`;
-
-  renderToggles(bot);
-  renderMovement();
+  }).join('');
 }
 
-function renderToggles(bot) {
-  const toggles = [
-    { key: 'antiAfkEnabled', action: 'toggle_afk', icon: '🔄', label: 'Анти-АФК' },
-    { key: 'autoReconnect', action: 'toggle_reconnect', icon: '🔁', label: 'Авто-реконнект' },
-    { key: 'chatBridgeEnabled', action: 'toggle_chat', icon: '💬', label: 'Чат-мост' },
-    { key: 'noAds', action: 'toggle_ads', icon: '🔇', label: 'Без рекламы', premiumOnly: true },
-  ];
-  document.getElementById('toggles-container').innerHTML = toggles
-    .filter(t => !t.premiumOnly || state.user?.isPremium)
-    .map(t => `
-      <div class="toggle-row" onclick="doAction('${t.action}', null, this)" data-key="${t.key}">
-        <div class="toggle-label">
-          <span class="toggle-icon">${t.icon}</span> ${t.label}
-        </div>
-        <div class="toggle-switch ${bot[t.key] ? 'on' : ''}"></div>
-      </div>`).join('');
+function fmtUp(ts) {
+  if (!ts) return '—';
+  const s = Math.max(0, Math.floor(Date.now()/1000) - ts);
+  return `${Math.floor(s/3600)}ч ${Math.floor((s%3600)/60)}м`;
 }
 
-function renderMovement() {
-  if (!state.user?.isPremium) {
-    document.getElementById('movement-grid').innerHTML = `
-      <div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">
-        🎮 Управление движением — только для Premium
-      </div>`;
-    return;
+async function openBot(id) {
+  currentBotId = id;
+  showScreen('s-detail');
+  await doRefresh();
+  refreshTimer = setInterval(doRefresh, 10000);
+}
+
+function goBack() {
+  clearInterval(refreshTimer); refreshTimer = null;
+  currentBotId = null;
+  showScreen('s-dash');
+  loadDash();
+}
+
+async function doRefresh() {
+  if (!currentBotId) return;
+  const ico = document.getElementById('refresh-ico');
+  ico.style.animation = 'spin .5s linear infinite';
+  try {
+    const r = await fetch(`/api/bot/${currentBotId}?tgData=` + encodeURIComponent(td()));
+    const d = await r.json();
+    if (d.ok) renderDetail(d);
+  } catch {}
+  ico.style.animation = '';
+}
+
+function renderDetail(d) {
+  const s = d.stats, b = d.bot;
+  document.getElementById('hdr-name').textContent = b.mc_username;
+  document.getElementById('hdr-server').textContent = `${b.server_host}:${b.server_port}`;
+  document.getElementById('det-name').textContent = b.mc_username;
+  document.getElementById('det-sub').textContent = `${b.server_host}:${b.server_port} · v${b.mc_version}`;
+  document.getElementById('bot-av-hero').innerHTML = robotSvg(52);
+
+  const pill = document.getElementById('det-pill');
+  if (s) {
+    pill.className = 'status-pill';
+    pill.innerHTML = '<span class="dot"></span> онлайн';
+  } else {
+    pill.className = 'status-pill off';
+    pill.innerHTML = '🔴 оффлайн';
   }
-  document.getElementById('movement-grid').innerHTML = `
-    <div class="move-row">
-      <div class="move-btn empty"></div>
-      <div class="move-btn" onclick="move('forward')">⬆️</div>
-      <div class="move-btn empty"></div>
-    </div>
-    <div class="move-row">
-      <div class="move-btn" onclick="move('left')">⬅️</div>
-      <div class="move-btn accent" onclick="move('jump')">⎵</div>
-      <div class="move-btn" onclick="move('right')">➡️</div>
-    </div>
-    <div class="move-row">
-      <div class="move-btn empty"></div>
-      <div class="move-btn" onclick="move('back')">⬇️</div>
-      <div class="move-btn empty"></div>
-    </div>
-    <div class="move-row" style="margin-top:4px">
-      <div class="move-btn-wide" onclick="move('sneak')">⇧ Шифт</div>
-      <div class="move-btn-wide" onclick="move('jump')">⎵ Прыжок</div>
-    </div>`;
+
+  if (s) {
+    setStat('st-hp', s.health, s.health >= 15 ? 'sv-green' : s.health >= 8 ? 'sv-yellow' : 'sv-red');
+    setStat('st-fd', s.food,   s.food >= 15 ? 'sv-green' : s.food >= 8 ? 'sv-yellow' : 'sv-red');
+    setStat('st-pl', s.onlineCount, 'sv-white');
+    setStat('st-up', `${s.uptimeH}ч ${s.uptimeM}м`, 'sv-white sv-sm');
+    setStat('st-wt', s.worldTime.replace(/[☀️🌙 ]/g,'').trim(), 'sv-white sv-sm');
+    setStat('st-gm', s.gamemode.slice(0,9), 'sv-white sv-sm');
+
+    document.getElementById('tog-afk').checked = !!s.antiAfkEnabled;
+    document.getElementById('tog-rec').checked = !!d.reconnect;
+    document.getElementById('tog-chat').checked = !!s.chatBridgeEnabled;
+
+    document.getElementById('op-cmd-txt').textContent = `/op ${b.mc_username}`;
+    if (s.opGranted) {
+      document.getElementById('op-granted').style.display = 'flex';
+      document.getElementById('op-btn').style.display = 'none';
+    } else {
+      document.getElementById('op-granted').style.display = 'none';
+      document.getElementById('op-btn').style.display = 'block';
+    }
+  }
+
+  renderPlayers(d.players || []);
+  renderLog(d.log || []);
 }
 
-// ── Tabs ───────────────────────────────────────────────────────────────────
-function switchTab(name) {
-  state.currentTab = name;
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    const names = ['controls', 'players', 'chat', 'log'];
-    t.classList.toggle('active', names[i] === name);
-  });
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
+function setStat(id, val, cls) {
+  const el = document.getElementById(id);
+  el.textContent = val ?? '—';
+  el.className = 'stat-val ' + cls;
+}
 
-  if (name === 'players') loadPlayers();
-  if (name === 'log') loadLog();
+function renderPlayers(pl) {
+  const el = document.getElementById('players-list');
+  el.innerHTML = pl.length
+    ? pl.map(p => `<div class="player-row"><span style="font-size:18px">🧑</span><span class="player-name">${p.name}</span><span class="player-ping">${p.ping ?? '?'}ms</span></div>`).join('')
+    : '<div class="no-data">Никого нет онлайн</div>';
+}
+
+function renderLog(log) {
+  const el = document.getElementById('log-list');
+  el.innerHTML = log.length
+    ? log.map(l => {
+        const c = l.includes('✅')||l.includes('👑') ? 'log-ok' : l.includes('⚠️')||l.includes('💀')||l.includes('⛔') ? 'log-err' : 'log-info';
+        return `<div class="log-entry ${c}">${l}</div>`;
+      }).join('')
+    : '<div class="no-data">Лог пустой</div>';
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
   if (name === 'chat') loadChat();
 }
 
-// ── Players ────────────────────────────────────────────────────────────────
-async function loadPlayers() {
-  if (!state.currentBotId) return;
+async function toggleSetting(key) {
   try {
-    const data = await apiFetch(`/api/bot/${state.currentBotId}/players`);
-    const list = document.getElementById('players-list');
-    if (!data.players.length) {
-      list.innerHTML = `<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Никого нет</div><div class="empty-sub">На сервере нет других игроков</div></div>`;
-      return;
-    }
-    list.innerHTML = data.players.map(p => `
-      <div class="player-row">
-        <img class="skin-face-sm" src="${p.avatarUrl}" alt=""
-          onerror="this.textContent='👤';this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center'">
-        <div class="player-name">${p.nick}</div>
-      </div>`).join('');
-  } catch {}
+    const r = await fetch(`/api/bot/${currentBotId}/toggle`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key, tgData: td() })
+    });
+    const d = await r.json();
+    toast(d.message || '✅');
+    if (key==='afk') document.getElementById('tog-afk').checked = !!d.value;
+    if (key==='chat') document.getElementById('tog-chat').checked = !!d.value;
+    if (key==='reconnect') document.getElementById('tog-rec').checked = !!d.value;
+  } catch { toast('❌ Ошибка'); }
 }
 
-// ── Log ────────────────────────────────────────────────────────────────────
-async function loadLog() {
-  if (!state.currentBotId) return;
+async function grantOp() {
   try {
-    const data = await apiFetch(`/api/bot/${state.currentBotId}/log`);
-    const container = document.getElementById('log-container');
-    if (!data.log.length) {
-      container.innerHTML = `<div class="empty"><div class="empty-icon">📜</div><div class="empty-title">Лог пуст</div></div>`;
-      return;
-    }
-    container.innerHTML = data.log.map(line => {
-      let cls = '';
-      if (line.includes('➕')) cls = 'join';
-      else if (line.includes('➖')) cls = 'leave';
-      else if (line.includes('[chat]')) cls = 'chat';
-      else if (line.includes('✅') || line.includes('👑') || line.includes('🔐')) cls = 'sys';
-      return `<div class="log-line ${cls}">${escHtml(line)}</div>`;
-    }).join('');
-  } catch {}
+    await fetch(`/api/bot/${currentBotId}/op`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tgData: td() })
+    });
+    toast('⚡ Команда отправлена...');
+    setTimeout(doRefresh, 1200);
+  } catch { toast('❌ Ошибка'); }
 }
 
-// ── Chat ───────────────────────────────────────────────────────────────────
+function copyOpCmd() {
+  const t = document.getElementById('op-cmd-txt').textContent;
+  navigator.clipboard?.writeText(t).then(() => toast('📋 Скопировано')).catch(() => toast('📋 ' + t));
+}
+
+// Movement
+function mv(dir) {
+  const idMap = { forward:'mv-f', back:'mv-b', left:'mv-l', right:'mv-r' };
+  if (idMap[dir]) document.getElementById(idMap[dir])?.classList.add('pr');
+  fetch(`/api/bot/${currentBotId}/move`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ dir, tgData: td() })
+  }).catch(()=>{});
+}
+function mvStop() {
+  ['mv-f','mv-b','mv-l','mv-r'].forEach(id => document.getElementById(id)?.classList.remove('pr'));
+}
+function mvStopAll() {
+  mvStop();
+  fetch(`/api/bot/${currentBotId}/move`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ dir:'stop', tgData: td() })
+  }).catch(()=>{});
+  toast('⏹ Остановлен');
+}
+
+async function startFollow() {
+  const name = document.getElementById('follow-inp').value.trim();
+  if (!name) return;
+  try {
+    await fetch(`/api/bot/${currentBotId}/follow`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ player: name, tgData: td() })
+    });
+    document.getElementById('follow-off').style.display = 'none';
+    document.getElementById('follow-on').style.display = 'block';
+    document.getElementById('follow-lbl').textContent = name;
+    toast(`👤 Слежка: ${name}`);
+  } catch { toast('❌ Ошибка'); }
+}
+async function stopFollow() {
+  await fetch(`/api/bot/${currentBotId}/follow/stop`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ tgData: td() })
+  }).catch(()=>{});
+  document.getElementById('follow-off').style.display = 'block';
+  document.getElementById('follow-on').style.display = 'none';
+  document.getElementById('follow-inp').value = '';
+  toast('🛑 Слежка остановлена');
+}
+
 async function loadChat() {
-  if (!state.currentBotId) return;
   try {
-    const data = await apiFetch(`/api/bot/${state.currentBotId}/chat`);
-    const container = document.getElementById('chat-messages');
-    const bot = state.bots.find(b => b.botId === state.currentBotId);
-    const isPrem = state.user?.isPremium;
-
-    document.getElementById('chat-input-row').style.display = isPrem ? 'flex' : 'none';
-
-    if (!data.messages.length) {
-      container.innerHTML = `<div class="empty"><div class="empty-icon">💬</div><div class="empty-title">Нет сообщений</div><div class="empty-sub">Сообщения из чата сервера появятся здесь</div></div>`;
-      return;
+    const r = await fetch(`/api/bot/${currentBotId}/chat?tgData=` + encodeURIComponent(td()));
+    const d = await r.json();
+    if (d.ok) {
+      const el = document.getElementById('chat-msgs');
+      const msgs = d.messages || [];
+      el.innerHTML = msgs.length
+        ? msgs.map(m => `<div class="chat-msg"><div class="chat-msg-hdr"><span class="chat-msg-name">${m.name}</span><span class="chat-msg-time">${m.time}</span></div><div class="chat-msg-txt">${m.text}</div></div>`).join('')
+        : '<div class="no-data">Чат пуст</div>';
+      el.scrollTop = el.scrollHeight;
     }
-    container.innerHTML = data.messages.map(m => `
-      <div class="chat-msg">
-        <div class="chat-author">${escHtml(m.playerName)}</div>
-        <div class="chat-text">${escHtml(m.message)}</div>
-      </div>`).join('');
-    container.scrollTop = container.scrollHeight;
   } catch {}
 }
 
 async function sendChat() {
-  const input = document.getElementById('chat-input');
-  const msg = input.value.trim();
-  if (!msg || !state.currentBotId) return;
-  input.value = '';
+  const inp = document.getElementById('chat-inp');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = '';
   try {
-    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'send_chat', value: msg }),
+    await fetch(`/api/bot/${currentBotId}/chat`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message: msg, tgData: td() })
     });
-    showToast('✅ Отправлено');
-    setTimeout(loadChat, 500);
-  } catch { showToast('❌ Ошибка'); }
+    toast('✅ Отправлено');
+    setTimeout(loadChat, 400);
+  } catch { toast('❌ Ошибка'); }
 }
 
-document.getElementById('chat-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendChat();
-});
-
-// ── Actions ────────────────────────────────────────────────────────────────
-async function doAction(action, value, el) {
-  if (!state.currentBotId) return;
-  try {
-    const data = await apiFetch(`/api/bot/${state.currentBotId}/action`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action, value }),
-    });
-    // Update toggle
-    if (el && data.value !== undefined) {
-      const sw = el.querySelector('.toggle-switch');
-      if (sw) sw.classList.toggle('on', data.value);
-      // Update state
-      const bot = state.bots.find(b => b.botId === state.currentBotId);
-      if (bot) {
-        const keyMap = {
-          toggle_afk: 'antiAfkEnabled',
-          toggle_reconnect: 'autoReconnect',
-          toggle_chat: 'chatBridgeEnabled',
-          toggle_ads: 'noAds',
-        };
-        if (keyMap[action]) bot[keyMap[action]] = data.value;
-      }
-    }
-    tg?.HapticFeedback?.impactOccurred('light');
-    showToast('✅ Готово');
-  } catch (e) { showToast('❌ Ошибка'); }
+async function discBot() {
+  tg.showConfirm('Отключить бота от сервера?', async (ok) => {
+    if (!ok) return;
+    try {
+      await fetch(`/api/bot/${currentBotId}/disconnect`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tgData: td() })
+      });
+      toast('✅ Бот отключён');
+      setTimeout(goBack, 700);
+    } catch { toast('❌ Ошибка'); }
+  });
 }
 
-async function move(dir) {
-  if (!state.currentBotId) return;
-  try {
-    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'move', value: dir }),
-    });
-    tg?.HapticFeedback?.impactOccurred('light');
-  } catch {}
+function connectClick() { tg.close(); }
+function upgradeClick() { tg.close(); }
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-async function disconnectBot() {
-  if (!state.currentBotId) return;
-  if (!confirm('Отключить бота от сервера?')) return;
-  try {
-    await apiFetch(`/api/bot/${state.currentBotId}/action`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'disconnect' }),
-    });
-    showToast('✅ Бот отключён');
-    tg?.HapticFeedback?.notificationOccurred('success');
-    state.bots = state.bots.filter(b => b.botId !== state.currentBotId);
-    state.currentBotId = null;
-    setTimeout(() => { renderHome(); goHome(); }, 800);
-  } catch { showToast('❌ Ошибка'); }
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-async function refreshDetail() {
-  try {
-    const data = await apiFetch('/api/me');
-    state.bots = data.bots;
-    const bot = state.bots.find(b => b.botId === state.currentBotId);
-    if (!bot) { goHome(); return; }
-    renderBotDetail(bot);
-    if (state.currentTab === 'players') loadPlayers();
-    if (state.currentTab === 'log') loadLog();
-    if (state.currentTab === 'chat') loadChat();
-    showToast('🔄 Обновлено');
-  } catch { showToast('❌ Ошибка'); }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
-}
-
-function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ── Start ──────────────────────────────────────────────────────────────────
 init();
 </script>
 </body>

@@ -14,6 +14,15 @@ function getUserId(tgDataStr) {
   return null;
 }
 
+// GET /api/me — alias used by older frontend
+router.get('/me', (req, res) => {
+  const telegramId = getUserId(req.query.tgData);
+  if (!telegramId) return res.json({ ok: false, error: 'unauthorized' });
+  const user = db.getUser(telegramId);
+  if (!user) return res.json({ ok: false, error: 'user_not_found' });
+  res.json({ ok: true, user });
+});
+
 router.get('/status', (req, res) => {
   const telegramId = getUserId(req.query.tgData);
   if (!telegramId) return res.json({ ok: false, error: 'unauthorized' });

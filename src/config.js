@@ -6,6 +6,7 @@ module.exports = {
   CRYPTOBOT_TOKEN: process.env.CRYPTOBOT_TOKEN || '',
   DB_PATH: process.env.DB_PATH || './data/bot.db',
   PORT: parseInt(process.env.PORT || '3000'),
+  WEBAPP_URL: process.env.WEBAPP_URL || process.env.RAILWAY_PUBLIC_DOMAIN || '',
   // Канал, на который нужна подписка (например @mychannel или -1001234567)
   // Оставь пустым чтобы отключить проверку
   REQUIRED_CHANNEL: process.env.REQUIRED_CHANNEL || '',

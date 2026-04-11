@@ -38,16 +38,19 @@ db.ready.then(() => {
     .then(() => {
       console.log('🤖 WHMineBot запущен!');
 
-      // Set Mini App menu button
-      const webDomain = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.WEBAPP_URL || '';
-      if (webDomain) {
-        const webUrl = webDomain.startsWith('http') ? webDomain : `https://${webDomain}`;
+      // Set Mini App menu button for ALL users
+      const rawUrl = config.WEBAPP_URL;
+      if (rawUrl) {
+        const webUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+        // setChatMenuButton without chatId sets default for all chats
         bot.telegram.setChatMenuButton({
           menu_button: { type: 'web_app', text: '🎮 Панель', web_app: { url: webUrl } }
-        }).catch(e => console.error('Menu button error:', e.message));
-        console.log('🌐 Mini App URL:', webUrl);
+        }).then(() => {
+          console.log('✅ Кнопка меню Mini App установлена:', webUrl);
+        }).catch(e => console.error('⚠️ Menu button error:', e.message));
       } else {
-        console.log('⚠️  RAILWAY_PUBLIC_DOMAIN не задан — добавь его в Variables на Railway');
+        console.log('⚠️  WEBAPP_URL не задан — кнопка меню не установлена');
+        console.log('   Добавь WEBAPP_URL=https://твой-домен.up.railway.app в Variables на Railway');
       }
 
       console.log(`👑 Admin ID: ${config.ADMIN_ID}`);
