@@ -60,6 +60,7 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       autoReconnect: true,
       authDetected: false,
       noAds: false,
+      sessionId: null,
       _host: host, _port: port, _version: version, _onEvent: onEvent,
     };
     activeBots.set(botId, instance);
@@ -75,6 +76,10 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       settled = true; spawned = true;
       db.updateBotStatus(botId, 'connected');
       db.upsertRecentServer(userId, host, port, version);
+      // Track session
+      try {
+        instance.sessionId = db.createSession(userId, username, host, port, version);
+      } catch {}
       addLog('✅ Бот подключился к серверу');
       startAntiAfk(instance, addLog);
       startFreeTimer(userId, instance, onEvent, addLog);
@@ -87,6 +92,7 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
     bot.on('kicked', (reason) => {
       let r = ''; try { r = JSON.parse(reason)?.text || reason; } catch { r = String(reason); }
       addLog(`⛔ Кикнут: ${r}`); onEvent('kicked', r);
+      try { if (instance.sessionId) { db.closeSession(instance.sessionId, 'kicked'); instance.sessionId = null; } } catch {}
       _scheduleReconnect(botId, instance, addLog);
     });
 
@@ -98,6 +104,7 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
         reject(new Error(friendlyError(err.message)));
       } else if (spawned) {
         onEvent('error', friendlyError(err.message));
+        try { if (instance.sessionId) { db.closeSession(instance.sessionId, 'error'); instance.sessionId = null; } } catch {}
         _scheduleReconnect(botId, instance, addLog);
       }
     });
@@ -110,6 +117,7 @@ async function connectBot(userId, host, port, version, botId, onEvent) {
       } else if (spawned) {
         addLog(`🔌 Закрыто${reason ? ': '+reason : ''}`);
         onEvent('disconnected');
+        try { if (instance.sessionId) { db.closeSession(instance.sessionId, 'disconnect'); instance.sessionId = null; } } catch {}
         _scheduleReconnect(botId, instance, addLog);
       }
     });
@@ -272,7 +280,6 @@ async function disconnectBot(userId) {
 }
 
 async function disconnectBotById(botId) {
-  // Mark as manual so end/error events don't trigger reconnect
   const inst = activeBots.get(botId);
   if (inst) inst.autoReconnect = false;
   if (!inst) return;
@@ -280,6 +287,7 @@ async function disconnectBotById(botId) {
   try { inst.bot.quit(); } catch {}
   _cleanupTimers(inst);
   try { db.updateBotStatus(botId, 'disconnected'); } catch {}
+  try { if (inst.sessionId) db.closeSession(inst.sessionId, 'manual'); } catch {}
   activeBots.delete(botId);
 }
 
@@ -294,6 +302,7 @@ function getBotStats(botId) {
     const connectedAt = rec?.connected_at || Math.floor(Date.now()/1000);
     const upSec = Math.max(0, Math.floor(Date.now()/1000) - connectedAt);
     const totalSec = (rec?.total_online_seconds||0) + upSec;
+    const rawPos = bot.entity?.position;
     return {
       botId, username: bot.username,
       server: `${rec?.server_host}:${rec?.server_port}`,
@@ -310,6 +319,7 @@ function getBotStats(botId) {
       followTarget: inst.followTarget,
       chatBridgeEnabled: inst.chatBridgeEnabled,
       autoReconnect: inst.autoReconnect,
+      pos: rawPos ? { x: Math.round(rawPos.x), y: Math.round(rawPos.y), z: Math.round(rawPos.z) } : null,
       noAds: inst.noAds,
     };
   } catch { return null; }
@@ -425,6 +435,7 @@ module.exports = {
   setCreative, sendChatToMC, toggleChatBridge,
   getActionLog, sendToAllBots, getOnlinePlayers,
   toggleAutoReconnect, toggleNoAds, sendAuth,
+  takeScreenshot, pingServer, getActiveBotsCount,
 };
 
 // toggle auto-reconnect for a bot
@@ -469,4 +480,136 @@ function getOnlinePlayers(botId) {
       .filter(Boolean)
       .sort();
   } catch { return null; }
+}
+
+// ── SCREENSHOT (canvas status card) ──────────────────────────────────────────
+async function takeScreenshot(botId) {
+  const inst = activeBots.get(botId);
+  if (!inst?.bot) return null;
+
+  let Canvas;
+  try { Canvas = require('canvas'); } catch { return null; }
+
+  const { createCanvas } = Canvas;
+  const W = 520, H = 320;
+  const c = createCanvas(W, H);
+  const ctx = c.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  // Top bar
+  const grad = ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0, '#1a3a2a');
+  grad.addColorStop(1, '#0d2a1a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, 52);
+
+  // Bot name
+  ctx.fillStyle = '#00e676';
+  ctx.font = 'bold 22px monospace';
+  const rec = require('./db').getBotById(botId);
+  ctx.fillText(rec?.mc_username || 'whminebot', 16, 33);
+
+  // Server
+  ctx.fillStyle = '#6b6b82';
+  ctx.font = '13px monospace';
+  ctx.fillText(`${rec?.server_host}:${rec?.server_port} · v${rec?.mc_version}`, 16, 46);
+
+  // Status dot
+  ctx.fillStyle = '#00e676';
+  ctx.beginPath(); ctx.arc(W-20, 26, 7, 0, Math.PI*2); ctx.fill();
+
+  const bot = inst.bot;
+  const health = Math.round(bot.health || 0);
+  const food   = Math.round(bot.food || 0);
+  const gm     = {0:'Выживание',1:'Креатив',2:'Приключение',3:'Наблюдатель'}[bot.game?.gameMode] || '—';
+  const players = Object.keys(bot.players || {}).length;
+  const pos    = bot.entity?.position;
+  const px = pos ? Math.round(pos.x) : 0;
+  const py = pos ? Math.round(pos.y) : 0;
+  const pz = pos ? Math.round(pos.z) : 0;
+  const tod = bot.time?.timeOfDay ?? 0;
+  const timeStr = tod < 6000 ? '☀ Утро' : tod < 12000 ? '☀ День' : tod < 18000 ? '🌅 Вечер' : '🌙 Ночь';
+
+  // Hearts row
+  const drawBar = (label, val, max, x, y, color, emptyColor) => {
+    ctx.fillStyle = '#9898b8';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(label, x, y - 6);
+    const cells = 10;
+    const filled = Math.round((val / max) * cells);
+    for (let i = 0; i < cells; i++) {
+      ctx.fillStyle = i < filled ? color : emptyColor;
+      ctx.fillRect(x + i * 22, y, 18, 18);
+      ctx.strokeStyle = '#0a0a0f';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + i * 22, y, 18, 18);
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(`${val}/${max}`, x + cells * 22 + 6, y + 14);
+  };
+
+  drawBar('❤  ЗДОРОВЬЕ', health, 20, 16, 70, '#ff5252', '#2a1a1a');
+  drawBar('🍗 ГОЛОД',    food,   20, 16, 110, '#ffd740', '#2a1a10');
+
+  // Stats grid
+  const stats = [
+    ['👥 ИГРОКИ', String(players)],
+    ['🎮 РЕЖИМ', gm],
+    ['🌍 ВРЕМЯ', timeStr],
+    ['📍 ПОЗИЦИЯ', `${px}, ${py}, ${pz}`],
+  ];
+
+  ctx.fillStyle = '#13131a';
+  ctx.strokeStyle = '#252535';
+  ctx.lineWidth = 1;
+  const gridY = 155;
+  stats.forEach(([label, val], i) => {
+    const gx = 16 + (i % 2) * 250;
+    const gy = gridY + Math.floor(i / 2) * 70;
+    ctx.fillRect(gx, gy, 236, 58);
+    ctx.strokeRect(gx, gy, 236, 58);
+    ctx.fillStyle = '#6b6b82';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText(label, gx + 10, gy + 18);
+    ctx.fillStyle = '#eeeef8';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(val.slice(0, 14), gx + 10, gy + 44);
+    ctx.fillStyle = '#13131a';
+  });
+
+  // Footer
+  ctx.fillStyle = '#252535';
+  ctx.fillRect(0, H - 28, W, 28);
+  ctx.fillStyle = '#55556a';
+  ctx.font = '11px monospace';
+  const now = new Date().toLocaleString('ru-RU', { timeZone:'Europe/Minsk', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
+  ctx.fillText(`WHMineBot · ${now}`, 12, H - 10);
+
+  return c.toBuffer('image/png');
+}
+
+// ── SERVER PING ───────────────────────────────────────────────────────────────
+async function pingServer(host, port = 25565) {
+  try {
+    const mc = require('minecraft-protocol');
+    return await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timeout')), 8000);
+      mc.ping({ host, port: parseInt(port) }, (err, result) => {
+        clearTimeout(timeout);
+        if (err) return reject(err);
+        resolve(result);
+      });
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+// ── MULTI-BOT COUNT ───────────────────────────────────────────────────────────
+function getActiveBotsCount(userId) {
+  return getActiveBotsForUser(userId).length;
 }

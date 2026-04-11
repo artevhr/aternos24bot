@@ -2,177 +2,261 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <title>WH Minebot</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0a0f;--card:#13131a;--card2:#1a1a24;--card3:#20202d;
-  --border:#252535;--accent:#00e676;--accent-dim:rgba(0,230,118,.12);
-  --red:#ff5252;--red-dim:rgba(255,82,82,.12);
-  --yellow:#ffd740;--blue:#448aff;
+  --bg:#090910;--card:#12121a;--card2:#191924;--card3:#1f1f2d;
+  --border:#242438;--accent:#00e676;--adim:rgba(0,230,118,.12);
+  --red:#ff5252;--rdim:rgba(255,82,82,.1);
+  --yellow:#ffd740;--blue:#448aff;--purple:#7c4dff;
   --text:#eeeef8;--text2:#9898b8;--muted:#55556a;
-  --radius:16px;--radius-sm:10px;
+  --r:16px;--rs:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Nunito',sans-serif;overflow-x:hidden;padding-bottom:env(safe-area-inset-bottom)}
 body{overscroll-behavior:none}
 
-#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:9999;transition:opacity .35s ease}
+/* ── LOADER ── */
+#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:9999;transition:opacity .3s}
 #loader.out{opacity:0;pointer-events:none}
-.ld-logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,#1a2a1a,#0d1f18);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;animation:ld-pulse 1.5s ease-in-out infinite}
-@keyframes ld-pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(0,230,118,.3)}50%{transform:scale(1.06);box-shadow:0 0 0 14px rgba(0,230,118,0)}}
-.ld-dots{display:flex;gap:7px}
-.ld-dots i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:ld-dot 1.3s ease-in-out infinite}
-.ld-dots i:nth-child(2){animation-delay:.18s}
-.ld-dots i:nth-child(3){animation-delay:.36s}
-@keyframes ld-dot{0%,80%,100%{transform:scale(.3);opacity:.3}40%{transform:scale(1);opacity:1}}
+.ld-logo{width:68px;height:68px;border-radius:20px;background:linear-gradient(135deg,#1a3a2a,#0d2018);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;animation:ldp 1.6s ease-in-out infinite}
+@keyframes ldp{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(0,230,118,.3)}50%{transform:scale(1.07);box-shadow:0 0 0 14px rgba(0,230,118,0)}}
+.ld-dots{display:flex;gap:6px}
+.ld-dots i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:ldd 1.3s ease infinite}
+.ld-dots i:nth-child(2){animation-delay:.18s}.ld-dots i:nth-child(3){animation-delay:.36s}
+@keyframes ldd{0%,80%,100%{transform:scale(.3);opacity:.3}40%{transform:scale(1);opacity:1}}
 
-.screen{display:none;min-height:100dvh;flex-direction:column;animation:scr-in .28s ease}
+/* ── SCREENS ── */
+.screen{display:none;min-height:100dvh;flex-direction:column;animation:sin .25s ease}
 .screen.active{display:flex}
-@keyframes scr-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes sin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.scroll{flex:1;overflow-y:auto;padding:14px 14px 90px;display:flex;flex-direction:column;gap:12px}
+.scroll::-webkit-scrollbar{display:none}
+.slabel{font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;padding:4px 2px 2px}
 
-.scroll-area{flex:1;overflow-y:auto;padding:14px 14px 88px;display:flex;flex-direction:column;gap:12px}
-.scroll-area::-webkit-scrollbar{display:none}
-
-.section-label{font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;padding:4px 2px 2px}
-
-.profile-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
-.profile-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(0,230,118,.05),transparent);pointer-events:none}
-.user-avatar{width:58px;height:58px;border-radius:16px;background:var(--card2);border:1.5px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.user-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.user-avatar .fallback{font-size:24px;font-weight:800;color:var(--accent)}
-.profile-info{flex:1;min-width:0}
-.profile-name{font-size:18px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ── PROFILE CARD ── */
+.profile-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
+.profile-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(0,230,118,.04),transparent);pointer-events:none}
+.u-av{width:58px;height:58px;border-radius:15px;background:var(--card2);border:1.5px solid var(--border);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.u-av img{width:100%;height:100%;object-fit:cover}
+.u-av .fb{font-size:24px;font-weight:800;color:var(--accent)}
+.u-info{flex:1;min-width:0}
+.u-name{font-size:18px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plan-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;margin-top:5px}
-.plan-eternal{background:rgba(0,188,212,.16);color:#00e5ff;border:1px solid rgba(0,188,212,.22)}
-.plan-monthly{background:rgba(76,175,80,.16);color:#69f0ae;border:1px solid rgba(76,175,80,.22)}
-.plan-free{background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border)}
-.upgrade-btn{margin-top:10px;width:100%;padding:10px;border-radius:var(--radius-sm);background:linear-gradient(135deg,#7c4dff,#448aff);border:none;color:#fff;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:opacity .15s,transform .12s}
-.upgrade-btn:active{opacity:.85;transform:scale(.98)}
+.pe{background:rgba(0,188,212,.15);color:#00e5ff;border:1px solid rgba(0,188,212,.22)}
+.pm{background:rgba(76,175,80,.15);color:#69f0ae;border:1px solid rgba(76,175,80,.22)}
+.pf{background:rgba(255,255,255,.05);color:var(--text2);border:1px solid var(--border)}
+.upg-btn{margin-top:9px;width:100%;padding:9px;border-radius:var(--rs);background:linear-gradient(135deg,#7c4dff,#448aff);border:none;color:#fff;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;transition:opacity .15s}
+.upg-btn:active{opacity:.82}
 
-.bot-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s,transform .1s}
-.bot-item:active{background:var(--card2);transform:scale(.99)}
-.bot-avatar{width:52px;height:52px;border-radius:14px;background:var(--card2);border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+/* ── BOT CARD ── */
+.bot-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
+.bot-card:active{background:var(--card2)}
+.bot-av{width:52px;height:52px;border-radius:13px;background:var(--card2);border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .bot-info{flex:1;min-width:0}
 .bot-name{font-size:16px;font-weight:800;letter-spacing:-.2px}
-.bot-server{font-size:12px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bot-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
-.tag-online{background:rgba(0,230,118,.13);color:#00e676;border:1px solid rgba(0,230,118,.2)}
-.tag-ver{background:var(--card3);color:var(--text2);border:1px solid var(--border)}
-.tag-info{background:var(--card3);color:var(--text);border:1px solid var(--border)}
+.bot-srv{font-size:11px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bot-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.tag{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.ton{background:rgba(0,230,118,.12);color:#00e676;border:1px solid rgba(0,230,118,.2)}
+.tver{background:var(--card3);color:var(--text2);border:1px solid var(--border)}
+.tinf{background:var(--card3);color:var(--text);border:1px solid var(--border)}
 .dot{width:6px;height:6px;border-radius:50%;background:#00e676;display:inline-block;animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
-.bot-arrow{color:var(--muted);font-size:20px;flex-shrink:0}
-.empty-bots{text-align:center;padding:32px 16px;color:var(--muted);font-size:14px;font-weight:600;line-height:1.6}
+.empty-state{text-align:center;padding:30px 16px;color:var(--muted);font-size:14px;font-weight:600;line-height:1.6}
 
-#detail-header{padding:12px 14px 0;display:flex;align-items:center;gap:10px}
-.icon-btn{width:38px;height:38px;border-radius:12px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s;flex-shrink:0}
+/* ── SAVED SERVER ROW ── */
+.saved-row{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .12s}
+.saved-row:active{background:var(--card2)}
+.saved-icon{font-size:20px;flex-shrink:0}
+.saved-info{flex:1;min-width:0}
+.saved-label{font-size:14px;font-weight:800}
+.saved-sub{font-size:11px;color:var(--muted)}
+.saved-del{width:30px;height:30px;border-radius:8px;background:var(--rdim);border:1px solid rgba(255,82,82,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.saved-del:active{background:rgba(255,82,82,.25)}
+
+/* ── DETAIL HEADER ── */
+.det-hdr{padding:12px 14px 0;display:flex;align-items:center;gap:10px}
+.icon-btn{width:38px;height:38px;border-radius:11px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .12s}
 .icon-btn:active{background:var(--card3)}
-.header-info{flex:1;min-width:0}
-.header-name{font-size:16px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.header-server{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-info{flex:1;min-width:0}
+.hdr-name{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-srv{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ── BOT HERO ── */
 .bot-hero{padding:0 14px;display:flex;align-items:center;gap:14px}
-.bot-hero-av{width:80px;height:80px;border-radius:20px;background:var(--card2);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.bot-hero-info{flex:1}
-.bot-hero-name{font-size:22px;font-weight:900;letter-spacing:-.4px}
-.bot-hero-sub{font-size:12px;color:var(--text2);margin-top:2px;font-family:'JetBrains Mono',monospace;word-break:break-all}
-.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800;margin-top:8px;background:rgba(0,230,118,.12);color:#00e676;border:1px solid rgba(0,230,118,.2)}
-.status-pill.off{background:var(--red-dim);color:var(--red);border-color:rgba(255,82,82,.2)}
+.bot-hero-av{width:78px;height:78px;border-radius:20px;background:var(--card2);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bot-hero-name{font-size:21px;font-weight:900;letter-spacing:-.4px}
+.bot-hero-sub{font-size:11px;color:var(--text2);margin-top:2px;font-family:'JetBrains Mono',monospace;word-break:break-all}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800;margin-top:8px;background:rgba(0,230,118,.1);color:#00e676;border:1px solid rgba(0,230,118,.18)}
+.status-pill.off{background:var(--rdim);color:var(--red);border-color:rgba(255,82,82,.18)}
 
-.stats-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 14px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 10px;display:flex;flex-direction:column;gap:4px}
-.stat-val{font-size:22px;font-weight:900;letter-spacing:-.5px;font-family:'JetBrains Mono',monospace}
-.sv-green{color:#00e676}.sv-yellow{color:#ffd740}.sv-red{color:#ff5252}.sv-white{color:var(--text)}
-.sv-sm{font-size:14px}
-.stat-label{font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+/* ── STATS GRID ── */
+.sg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;padding:0 14px}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:11px 10px}
+.sv{font-size:21px;font-weight:900;letter-spacing:-.5px;font-family:'JetBrains Mono',monospace}
+.sg{color:#00e676}.sy{color:#ffd740}.sr{color:#ff5252}.sw{color:var(--text)}
+.ssm{font-size:13px}
+.sl{font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:3px}
 
+/* ── HEARTS WIDGET ── */
+.hearts-section{padding:0 14px;display:flex;flex-direction:column;gap:8px}
+.hearts-row{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.hearts-label{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.hearts-label span{color:var(--text);font-size:14px;font-family:'JetBrains Mono',monospace}
+.hearts-wrap{display:flex;gap:3px;flex-wrap:wrap}
+.heart{width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:16px;transition:transform .15s}
+.heart.full{animation:none}
+.heart.half{opacity:.6}
+.heart.empty{opacity:.15}
+.heart.pulse{animation:hpulse .6s ease}
+@keyframes hpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+.food-wrap{display:flex;gap:3px;flex-wrap:wrap}
+.drum{width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.drum.empty{opacity:.15}
+
+/* ── TABS ── */
 .tabs-wrap{padding:0 14px;background:var(--bg);z-index:10;padding-top:4px}
-.tabs{display:flex;border-bottom:1.5px solid var(--border)}
-.tab-btn{flex:1;padding:10px 2px;font-family:'Nunito',sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .15s,border-color .15s}
+.tabs{display:flex;border-bottom:1.5px solid var(--border);overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{flex-shrink:0;padding:10px 10px;font-family:'Nunito',sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1.5px;transition:color .15s,border-color .15s}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
-
 .tab-panel{display:none;flex-direction:column;gap:10px;padding:14px 14px 20px}
 .tab-panel.active{display:flex}
 
-.toggle-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
-.toggle-row:active{background:var(--card2)}
-.t-icon{width:36px;height:36px;border-radius:10px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.t-label{flex:1;font-size:15px;font-weight:700}
+/* ── TOGGLE ROWS ── */
+.tog-row{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:13px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
+.tog-row:active{background:var(--card2)}
+.t-ico{width:36px;height:36px;border-radius:9px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.t-lbl{flex:1;font-size:14px;font-weight:700}
 .t-sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
+.ios-tog{position:relative;width:50px;height:30px;flex-shrink:0}
+.ios-tog input{opacity:0;width:0;height:0}
+.ios-sl{position:absolute;inset:0;border-radius:15px;background:var(--card3);transition:.25s;cursor:pointer;border:1.5px solid var(--border)}
+.ios-sl:before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;left:3px;top:50%;transform:translateY(-50%);background:#fff;transition:.25s;box-shadow:0 2px 4px rgba(0,0,0,.4)}
+input:checked+.ios-sl{background:var(--accent);border-color:var(--accent)}
+input:checked+.ios-sl:before{transform:translateY(-50%) translateX(20px)}
 
-.ios-toggle{position:relative;width:50px;height:30px;flex-shrink:0}
-.ios-toggle input{opacity:0;width:0;height:0}
-.ios-slider{position:absolute;inset:0;border-radius:15px;background:var(--card3);transition:.25s;cursor:pointer;border:1.5px solid var(--border)}
-.ios-slider:before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;left:3px;top:50%;transform:translateY(-50%);background:#fff;transition:.25s;box-shadow:0 2px 4px rgba(0,0,0,.4)}
-input:checked+.ios-slider{background:var(--accent);border-color:var(--accent)}
-input:checked+.ios-slider:before{transform:translateY(-50%) translateX(20px)}
-
-.op-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px}
-.op-title{font-size:14px;font-weight:800;margin-bottom:6px}
-.op-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px}
-.op-cmd{font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
+/* ── OP CARD ── */
+.op-card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:15px}
+.op-title{font-size:14px;font-weight:800;margin-bottom:5px}
+.op-sub{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:11px}
+.op-cmd{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
 .op-cmd:active{background:var(--card3)}
-.op-granted{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.2);border-radius:10px;margin-top:10px;font-size:13px;font-weight:700;color:#00e676}
-.op-btn{margin-top:10px;width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#ffd740,#ff9100);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:opacity .12s}
+.op-granted{display:flex;align-items:center;gap:8px;padding:10px 13px;background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.18);border-radius:9px;margin-top:9px;font-size:13px;font-weight:700;color:#00e676}
+.op-btn{margin-top:9px;width:100%;padding:11px;border-radius:9px;background:linear-gradient(135deg,#ffd740,#ff9100);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer}
 .op-btn:active{opacity:.8}
 
-.move-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;max-width:230px;margin:0 auto}
+/* ── SCREENSHOT BTN ── */
+.screenshot-btn{width:100%;padding:12px;border-radius:var(--rs);background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .12s,border-color .12s}
+.screenshot-btn:active,.screenshot-btn:hover{background:var(--card2);border-color:var(--accent)}
+.screenshot-btn.loading{opacity:.6;pointer-events:none}
+
+/* ── MOVEMENT ── */
+.mv-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;max-width:230px;margin:0 auto}
 .mv-btn{aspect-ratio:1;border-radius:12px;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;user-select:none;transition:background .1s,transform .1s,border-color .1s}
-.mv-btn:active,.mv-btn.pr{background:var(--accent-dim);border-color:var(--accent);transform:scale(.93)}
-.mv-stop{background:rgba(255,82,82,.08);border-color:rgba(255,82,82,.18)}
+.mv-btn:active,.mv-btn.pr{background:var(--adim);border-color:var(--accent);transform:scale(.93)}
+.mv-stop{background:rgba(255,82,82,.07);border-color:rgba(255,82,82,.15)}
 .mv-empty{background:transparent;border-color:transparent;pointer-events:none}
 .mv-extras{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
-.mv-extra{padding:13px;border-radius:12px;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:700;cursor:pointer;transition:background .1s,transform .1s}
-.mv-extra:active{background:var(--card2);transform:scale(.97)}
-
-.follow-wrap{margin-top:4px}
-.follow-row{display:flex;gap:8px}
-.follow-inp{flex:1;padding:12px 14px;border-radius:10px;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
+.mv-extra{padding:13px;border-radius:12px;background:var(--card);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:700;cursor:pointer;transition:background .1s}
+.mv-extra:active{background:var(--card2)}
+.follow-row{display:flex;gap:8px;margin-top:2px}
+.follow-inp{flex:1;padding:12px 14px;border-radius:var(--rs);background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
 .follow-inp:focus{border-color:var(--accent)}
-.follow-go{padding:12px 16px;border-radius:10px;background:var(--accent);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer}
+.follow-go{padding:12px 16px;border-radius:var(--rs);background:var(--accent);border:none;color:#000;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer}
 .follow-go:active{opacity:.8}
-.follow-active-row{padding:12px 14px;border-radius:10px;background:rgba(255,215,64,.08);border:1.5px solid rgba(255,215,64,.18);display:flex;align-items:center;justify-content:space-between}
+.follow-active-row{padding:12px 14px;border-radius:var(--rs);background:rgba(255,215,64,.07);border:1.5px solid rgba(255,215,64,.15);display:flex;align-items:center;justify-content:space-between}
 .follow-lbl{font-size:13px;font-weight:700;color:#ffd740}
-.follow-stop-btn{padding:5px 12px;border-radius:8px;background:var(--red-dim);border:1px solid rgba(255,82,82,.2);color:var(--red);font-size:12px;font-weight:700;cursor:pointer}
+.follow-stop{padding:5px 12px;border-radius:8px;background:var(--rdim);border:1px solid rgba(255,82,82,.18);color:var(--red);font-size:12px;font-weight:700;cursor:pointer}
 
-.player-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:center;gap:10px}
-.player-name{font-size:14px;font-weight:700}
-.player-ping{font-size:12px;color:var(--muted);margin-left:auto;font-family:'JetBrains Mono',monospace}
-.no-data{text-align:center;padding:28px;color:var(--muted);font-size:14px;font-weight:600}
+/* ── PLAYERS TAB ── */
+.pl-row{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.pl-name{font-size:14px;font-weight:700}
+.pl-ping{font-size:12px;color:var(--muted);margin-left:auto;font-family:'JetBrains Mono',monospace}
 
-.chat-msgs{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+/* ── CHAT TAB ── */
+.chat-msgs{display:flex;flex-direction:column;gap:7px;max-height:240px;overflow-y:auto}
 .chat-msgs::-webkit-scrollbar{display:none}
-.chat-msg{padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border)}
-.chat-msg-hdr{display:flex;gap:8px;align-items:baseline;margin-bottom:3px}
-.chat-msg-name{font-size:12px;font-weight:800;color:var(--accent)}
-.chat-msg-time{font-size:10px;color:var(--muted)}
-.chat-msg-txt{font-size:13px;font-weight:600;line-height:1.4}
-.chat-send-row{display:flex;gap:8px;margin-top:4px}
-.chat-inp{flex:1;padding:12px 14px;border-radius:10px;background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
+.chat-msg{padding:8px 12px;border-radius:9px;background:var(--card);border:1px solid var(--border)}
+.chat-mhdr{display:flex;gap:8px;align-items:baseline;margin-bottom:3px}
+.chat-mname{font-size:11px;font-weight:800;color:var(--accent)}
+.chat-mtime{font-size:10px;color:var(--muted)}
+.chat-mtxt{font-size:13px;font-weight:600;line-height:1.4}
+.chat-send{display:flex;gap:8px;margin-top:4px}
+.chat-inp{flex:1;padding:12px 14px;border-radius:var(--rs);background:var(--card);border:1.5px solid var(--border);color:var(--text);font-family:'Nunito',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .15s}
 .chat-inp:focus{border-color:var(--accent)}
-.chat-send-btn{width:46px;height:46px;border-radius:10px;background:var(--accent);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
-.chat-send-btn:active{opacity:.8;transform:scale(.95)}
+.chat-sbtn{width:46px;height:46px;border-radius:var(--rs);background:var(--accent);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.chat-sbtn:active{opacity:.8}
 
-.log-list{display:flex;flex-direction:column;gap:6px}
-.log-entry{padding:8px 12px;border-radius:8px;background:var(--card);border-left:2px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);line-height:1.5}
-.log-ok{border-left-color:#00e676}.log-err{border-left-color:#ff5252}.log-info{border-left-color:#448aff}
+/* ── LOG TAB ── */
+.log-entry{padding:7px 11px;border-radius:7px;background:var(--card);border-left:2px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);line-height:1.5}
+.lok{border-left-color:#00e676}.lerr{border-left-color:#ff5252}.linf{border-left-color:#448aff}
 
-.fab{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);border-radius:50px;padding:14px 32px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px;white-space:nowrap;z-index:100;border:none;transition:transform .12s,opacity .12s}
-.fab-green{background:var(--accent);color:#000;box-shadow:0 4px 24px rgba(0,230,118,.3)}
+/* ── INVENTORY TAB ── */
+.inv-section-label{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:8px 0 6px}
+.inv-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.inv-grid.armor{grid-template-columns:repeat(4,1fr)}
+.inv-slot{
+  aspect-ratio:1;border-radius:7px;background:var(--card2);
+  border:1.5px solid var(--border);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:3px;font-size:9px;font-weight:700;color:var(--text2);
+  position:relative;overflow:hidden;transition:border-color .12s;
+  cursor:default;
+}
+.inv-slot.has-item{border-color:rgba(0,230,118,.25);background:var(--card)}
+.inv-slot.equipped{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.inv-slot .item-emoji{font-size:18px;line-height:1}
+.inv-slot .item-count{position:absolute;bottom:1px;right:3px;font-size:8px;font-weight:800;color:var(--yellow)}
+.inv-slot .item-name{font-size:7px;color:var(--text2);text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;width:100%;padding:0 2px;margin-top:1px}
+.inv-empty-slot{opacity:.3}
+
+/* ── SERVER PING TAB ── */
+.server-info-card{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);overflow:hidden}
+.server-motd{padding:14px 14px 10px;font-size:14px;font-weight:700;line-height:1.5;color:var(--text)}
+.server-favicon{width:48px;height:48px;border-radius:8px;float:left;margin:0 12px 0 0;image-rendering:pixelated}
+.server-stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--border)}
+.server-stat{padding:12px 10px;text-align:center;border-right:1px solid var(--border)}
+.server-stat:last-child{border-right:none}
+.server-stat-val{font-size:18px;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--accent)}
+.server-stat-lbl{font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.server-pl-list{padding:10px 14px 14px;display:flex;flex-wrap:wrap;gap:6px}
+.server-pl-chip{padding:4px 10px;border-radius:20px;background:var(--card2);border:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2)}
+.ping-offline{text-align:center;padding:28px;color:var(--red);font-size:14px;font-weight:700}
+.ping-loading{text-align:center;padding:28px;color:var(--muted);font-size:13px;font-weight:600}
+
+/* ── SESSIONS TAB ── */
+.session-row{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.session-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.session-srv{font-size:13px;font-weight:800}
+.session-dur{font-size:13px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace}
+.session-bot{display:flex;align-items:center;gap:8px;margin-top:4px}
+.session-date{font-size:11px;color:var(--muted)}
+.session-reason{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.sr-manual{background:var(--card3);color:var(--muted)}
+.sr-kicked{background:var(--rdim);color:var(--red)}
+.sr-disconnect,.sr-error{background:rgba(255,215,64,.08);color:var(--yellow)}
+
+/* ── FAB BUTTONS ── */
+.fab{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);border-radius:50px;padding:14px 32px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap;z-index:100;border:none;transition:transform .12s,opacity .12s}
+.fab-green{background:var(--accent);color:#000;box-shadow:0 4px 24px rgba(0,230,118,.28)}
 .fab-green:active{transform:translateX(-50%) scale(.96)}
-.fab-red{background:var(--card);color:var(--red);border:1.5px solid rgba(255,82,82,.3)}
-.fab-red:active{transform:translateX(-50%) scale(.96);background:var(--red-dim)}
+.fab-red{background:var(--card);color:var(--red);border:1.5px solid rgba(255,82,82,.28)}
+.fab-red:active{transform:translateX(-50%) scale(.96);background:var(--rdim)}
 .fab.hidden{display:none}
 
-.toast{position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--card2);border:1px solid var(--border);border-radius:50px;padding:10px 20px;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;z-index:9998;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+/* ── TOAST ── */
+.toast{position:fixed;bottom:calc(96px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--card2);border:1px solid var(--border);border-radius:50px;padding:10px 20px;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;z-index:9998;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* generic */
+.no-data{text-align:center;padding:26px;color:var(--muted);font-size:13px;font-weight:600}
 @keyframes spin{to{transform:rotate(360deg)}}
-.spin{animation:spin .5s linear infinite}
+.spinning{animation:spin .5s linear infinite}
 </style>
 </head>
 <body>
@@ -184,11 +268,13 @@ input:checked+.ios-slider:before{transform:translateY(-50%) translateX(20px)}
       <rect x="10" y="6" width="20" height="16" rx="5" fill="#0d2a1a"/>
       <rect x="13" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
       <rect x="22" y="10" width="5" height="5" rx="1.5" fill="#00e676"/>
-      <rect x="15" y="17" width="10" height="3" rx="1.5" fill="#00e676" opacity=".5"/>
+      <rect x="15" y="17" width="10" height="3" rx="1.5" fill="#00e676" opacity=".45"/>
       <rect x="14" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
       <rect x="22" y="24" width="4" height="12" rx="2" fill="#1a3a2a"/>
       <rect x="10" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
       <rect x="26" y="24" width="4" height="7" rx="2" fill="#1a3a2a"/>
+      <rect x="3" y="12" width="5" height="9" rx="2.5" fill="#1a3a2a"/>
+      <rect x="32" y="12" width="5" height="9" rx="2.5" fill="#1a3a2a"/>
     </svg>
   </div>
   <div class="ld-dots"><i></i><i></i><i></i></div>
@@ -196,99 +282,151 @@ input:checked+.ios-slider:before{transform:translateY(-50%) translateX(20px)}
 
 <div class="toast" id="toast"></div>
 
-<!-- ════ SCREEN: DASH ════ -->
+<!-- ══════════════ SCREEN: DASHBOARD ══════════════ -->
 <div class="screen active" id="s-dash">
-  <div class="scroll-area">
+  <div class="scroll">
 
     <div class="profile-card">
-      <div class="user-avatar" id="user-av">
-        <span class="fallback" id="user-fb">?</span>
-      </div>
-      <div class="profile-info">
-        <div class="profile-name" id="user-name">...</div>
-        <div class="plan-badge plan-free" id="plan-badge">🆓 Бесплатный</div>
-        <button class="upgrade-btn" id="upgrade-btn" style="display:none" onclick="upgradeClick()">⚡ Апгрейд до Eternal</button>
+      <div class="u-av" id="u-av"><span class="fb" id="u-fb">?</span></div>
+      <div class="u-info">
+        <div class="u-name" id="u-name">...</div>
+        <div class="plan-badge pf" id="plan-badge">🆓 Бесплатный</div>
+        <button class="upg-btn" id="upg-btn" style="display:none" onclick="upgradeClick()">⚡ Апгрейд до Eternal</button>
       </div>
     </div>
 
-    <div class="section-label">Активные боты</div>
+    <!-- Active bots -->
+    <div class="slabel">Активные боты</div>
     <div id="bots-list"></div>
 
+    <!-- Saved servers -->
+    <div id="saved-section" style="display:none">
+      <div class="slabel" style="margin-top:4px">Избранные серверы</div>
+      <div id="saved-list"></div>
+    </div>
+
+    <!-- Sessions history link -->
+    <div class="slabel" style="margin-top:4px">История сессий</div>
+    <div class="saved-row" onclick="openSessions()">
+      <div class="saved-icon">📋</div>
+      <div class="saved-info"><div class="saved-label">История подключений</div><div class="saved-sub">Все прошлые сессии</div></div>
+      <div style="color:var(--muted);font-size:18px">›</div>
+    </div>
+
   </div>
-  <button class="fab fab-green" id="connect-fab" onclick="connectClick()">＋ Подключить бота</button>
+  <button class="fab fab-green" onclick="connectClick()">＋ Подключить бота</button>
 </div>
 
-<!-- ════ SCREEN: DETAIL ════ -->
-<div class="screen" id="s-detail">
+<!-- ══════════════ SCREEN: SESSIONS ══════════════ -->
+<div class="screen" id="s-sessions">
+  <div class="det-hdr">
+    <div class="icon-btn" onclick="showScreen('s-dash')">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 14L6 9L11 4" stroke="#eeeef8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="hdr-info"><div class="hdr-name">История сессий</div><div class="hdr-srv">Все подключения</div></div>
+  </div>
+  <div class="scroll" style="padding-top:12px">
+    <div id="sessions-list"></div>
+  </div>
+</div>
 
-  <div id="detail-header">
+<!-- ══════════════ SCREEN: BOT DETAIL ══════════════ -->
+<div class="screen" id="s-detail">
+  <div class="det-hdr">
     <div class="icon-btn" onclick="goBack()">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M11 14L6 9L11 4" stroke="#eeeef8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
-    <div class="header-info">
-      <div class="header-name" id="hdr-name">—</div>
-      <div class="header-server" id="hdr-server">—</div>
+    <div class="hdr-info">
+      <div class="hdr-name" id="hdr-name">—</div>
+      <div class="hdr-srv" id="hdr-srv">—</div>
     </div>
-    <div class="icon-btn" id="refresh-btn" onclick="doRefresh()">
-      <svg id="refresh-ico" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15 9A6 6 0 0 1 3.5 13.2M3 9a6 6 0 0 1 11.5-4.2" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round"/><path d="M15 5.5V9H11.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5V9H6.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="icon-btn" id="ref-btn" onclick="doRefresh()">
+      <svg id="ref-ico" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15 9A6 6 0 0 1 3.5 13.2M3 9a6 6 0 0 1 11.5-4.2" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round"/><path d="M15 5.5V9H11.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5V9H6.5" stroke="#eeeef8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
   </div>
 
-  <div class="scroll-area" style="padding-top:12px">
+  <div class="scroll" style="padding-top:12px">
 
+    <!-- Hero -->
     <div class="bot-hero">
-      <div class="bot-hero-av" id="bot-av-hero"></div>
-      <div class="bot-hero-info">
+      <div class="bot-hero-av" id="det-av"></div>
+      <div style="flex:1">
         <div class="bot-hero-name" id="det-name">—</div>
         <div class="bot-hero-sub" id="det-sub">—</div>
         <div class="status-pill" id="det-pill"><span class="dot"></span> онлайн</div>
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-val sv-green" id="st-hp">—</div><div class="stat-label">❤️ Здоровье</div></div>
-      <div class="stat-card"><div class="stat-val sv-green" id="st-fd">—</div><div class="stat-label">🍗 Голод</div></div>
-      <div class="stat-card"><div class="stat-val sv-white" id="st-pl">—</div><div class="stat-label">👥 Игроки</div></div>
-      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-up">—</div><div class="stat-label">⏱ Сессия</div></div>
-      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-wt">—</div><div class="stat-label">🌍 Время</div></div>
-      <div class="stat-card"><div class="stat-val sv-white sv-sm" id="st-gm">—</div><div class="stat-label">🎮 Режим</div></div>
+    <!-- ── HEARTS WIDGET ── -->
+    <div class="hearts-section" id="hearts-section">
+      <div class="hearts-row">
+        <div class="hearts-label">❤️ ЗДОРОВЬЕ <span id="hp-num">20/20</span></div>
+        <div class="hearts-wrap" id="hearts-hp"></div>
+      </div>
+      <div class="hearts-row">
+        <div class="hearts-label">🍗 ГОЛОД <span id="hp-food">20/20</span></div>
+        <div class="food-wrap" id="hearts-food"></div>
+      </div>
     </div>
 
+    <!-- Stats grid -->
+    <div class="sg" id="sg">
+      <div class="sc"><div class="sv sw ssm" id="st-pl">—</div><div class="sl">👥 Игроки</div></div>
+      <div class="sc"><div class="sv sw ssm" id="st-up">—</div><div class="sl">⏱ Сессия</div></div>
+      <div class="sc"><div class="sv sw ssm" id="st-wt">—</div><div class="sl">🌍 Время</div></div>
+      <div class="sc"><div class="sv sw ssm" id="st-gm">—</div><div class="sl">🎮 Режим</div></div>
+      <div class="sc" style="grid-column:span 2"><div class="sv sw" style="font-size:12px;font-family:'JetBrains Mono',monospace" id="st-pos">—</div><div class="sl">📍 Позиция</div></div>
+    </div>
+
+    <!-- Screenshot button -->
+    <div style="padding:0 14px">
+      <button class="screenshot-btn" id="ss-btn" onclick="takeScreenshot()">
+        📷 Сделать скриншот-карточку
+      </button>
+    </div>
+
+    <!-- Save server button -->
+    <div style="padding:0 14px">
+      <button class="screenshot-btn" id="save-srv-btn" onclick="saveCurrentServer()">
+        ⭐ Сохранить сервер в избранное
+      </button>
+    </div>
+
+    <!-- Tabs -->
     <div class="tabs-wrap">
       <div class="tabs" id="tabs-el"></div>
     </div>
 
+    <!-- TAB: УПРАВЛЕНИЕ -->
     <div class="tab-panel active" id="tab-ctrl">
-      <div class="toggle-row" onclick="toggleSetting('afk')">
-        <div class="t-icon">🔄</div>
-        <div style="flex:1"><div class="t-label">Анти-АФК</div><div class="t-sub">Случайные движения каждые ~15 сек</div></div>
-        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-afk" onchange="toggleSetting('afk')"><span class="ios-slider"></span></label>
+      <div class="tog-row" onclick="toggleSetting('afk')">
+        <div class="t-ico">🔄</div>
+        <div style="flex:1"><div class="t-lbl">Анти-АФК</div><div class="t-sub">Случайные движения каждые ~15 сек</div></div>
+        <label class="ios-tog" onclick="event.stopPropagation()"><input type="checkbox" id="tog-afk" onchange="toggleSetting('afk')"><span class="ios-sl"></span></label>
       </div>
-      <div class="toggle-row" onclick="toggleSetting('reconnect')">
-        <div class="t-icon">🔁</div>
-        <div style="flex:1"><div class="t-label">Авто-реконнект</div><div class="t-sub">Переподключаться при кике/разрыве</div></div>
-        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-rec" onchange="toggleSetting('reconnect')"><span class="ios-slider"></span></label>
+      <div class="tog-row" onclick="toggleSetting('reconnect')">
+        <div class="t-ico">🔁</div>
+        <div style="flex:1"><div class="t-lbl">Авто-реконнект</div><div class="t-sub">Переподключаться при кике/разрыве</div></div>
+        <label class="ios-tog" onclick="event.stopPropagation()"><input type="checkbox" id="tog-rec" onchange="toggleSetting('reconnect')"><span class="ios-sl"></span></label>
       </div>
-      <div class="toggle-row" id="chat-tog-row" onclick="toggleSetting('chat')">
-        <div class="t-icon">💬</div>
-        <div style="flex:1"><div class="t-label">Чат-мост</div><div class="t-sub">Пересылать чат MC ↔ Telegram</div></div>
-        <label class="ios-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="tog-chat" onchange="toggleSetting('chat')"><span class="ios-slider"></span></label>
+      <div class="tog-row" onclick="toggleSetting('chat')">
+        <div class="t-ico">💬</div>
+        <div style="flex:1"><div class="t-lbl">Чат-мост</div><div class="t-sub">Пересылать чат MC ↔ Telegram</div></div>
+        <label class="ios-tog" onclick="event.stopPropagation()"><input type="checkbox" id="tog-chat" onchange="toggleSetting('chat')"><span class="ios-sl"></span></label>
       </div>
       <div class="op-card">
         <div class="op-title">👑 Права оператора</div>
         <div class="op-sub">Выдай боту ОП, чтобы он вошёл в Creative и не голодал</div>
-        <div class="op-cmd" id="op-cmd-el" onclick="copyOpCmd()">
-          <span id="op-cmd-txt">/op whminebot-?</span>
-          <span style="color:var(--muted);font-size:10px">КОПИРОВАТЬ</span>
-        </div>
-        <div id="op-granted" class="op-granted" style="display:none"><span>👑</span><span>ОП получен — бот в Creative</span></div>
+        <div class="op-cmd" id="op-cmd" onclick="copyOpCmd()"><span id="op-cmd-txt">/op ?</span><span style="color:var(--muted);font-size:10px">КОПИРОВАТЬ</span></div>
+        <div id="op-granted" class="op-granted" style="display:none">👑 ОП получен — бот в Creative</div>
         <button class="op-btn" id="op-btn" onclick="grantOp()">✅ ОП выдан → Войти в Creative</button>
       </div>
     </div>
 
+    <!-- TAB: ДВИЖЕНИЕ -->
     <div class="tab-panel" id="tab-move">
-      <div style="text-align:center"><div style="font-size:11px;font-weight:700;color:var(--muted)">Каждое нажатие = 1 блок движения</div></div>
-      <div class="move-grid">
+      <div style="text-align:center;margin-bottom:2px"><div style="font-size:11px;font-weight:700;color:var(--muted)">Нажатие = 1 блок</div></div>
+      <div class="mv-grid">
         <div class="mv-btn mv-empty"></div>
         <div class="mv-btn" id="mv-f" ontouchstart="mv('forward')" ontouchend="mvStop()" onmousedown="mv('forward')" onmouseup="mvStop()">⬆️</div>
         <div class="mv-btn mv-empty"></div>
@@ -303,69 +441,77 @@ input:checked+.ios-slider:before{transform:translateY(-50%) translateX(20px)}
         <div class="mv-extra" ontouchstart="mv('jump')" ontouchend="mvStop()" onmousedown="mv('jump')" onmouseup="mvStop()">⎵ Прыжок</div>
         <div class="mv-extra" ontouchstart="mv('sneak')" ontouchend="mvStop()" onmousedown="mv('sneak')" onmouseup="mvStop()">⇧ Шифт</div>
       </div>
-      <div class="follow-wrap">
-        <div class="section-label" style="margin-bottom:8px">Следовать за игроком</div>
-        <div id="follow-off">
-          <div class="follow-row">
-            <input class="follow-inp" id="follow-inp" placeholder="Никнейм..." type="text">
-            <button class="follow-go" onclick="startFollow()">▶</button>
-          </div>
+      <div class="slabel" style="margin-top:4px">Следовать за игроком</div>
+      <div id="follow-off">
+        <div class="follow-row">
+          <input class="follow-inp" id="follow-inp" placeholder="Никнейм..." type="text">
+          <button class="follow-go" onclick="startFollow()">▶</button>
         </div>
-        <div id="follow-on" style="display:none">
-          <div class="follow-active-row">
-            <div class="follow-lbl">👤 Слежка: <span id="follow-lbl"></span></div>
-            <div class="follow-stop-btn" onclick="stopFollow()">Стоп</div>
-          </div>
+      </div>
+      <div id="follow-on" style="display:none">
+        <div class="follow-active-row">
+          <div class="follow-lbl">👤 Слежка: <span id="follow-lbl">—</span></div>
+          <div class="follow-stop" onclick="stopFollow()">Стоп</div>
         </div>
       </div>
     </div>
 
+    <!-- TAB: ИНВЕНТАРЬ -->
+    <div class="tab-panel" id="tab-inv">
+      <div id="inv-content"><div class="no-data">Загрузка...</div></div>
+    </div>
+
+    <!-- TAB: СЕРВЕР -->
+    <div class="tab-panel" id="tab-srv">
+      <div id="srv-content"><div class="no-data">Загрузка...</div></div>
+    </div>
+
+    <!-- TAB: ИГРОКИ -->
     <div class="tab-panel" id="tab-pl">
       <div id="players-list"></div>
     </div>
 
+    <!-- TAB: ЧАТ -->
     <div class="tab-panel" id="tab-chat">
       <div class="chat-msgs" id="chat-msgs"></div>
-      <div class="chat-send-row">
+      <div class="chat-send">
         <input class="chat-inp" id="chat-inp" placeholder="Написать в чат MC..." maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
-        <button class="chat-send-btn" onclick="sendChat()">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9L16 3L10 9L16 15Z" fill="#000"/></svg>
-        </button>
+        <button class="chat-sbtn" onclick="sendChat()"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 9L16 3L10 9L16 15Z" fill="#000"/></svg></button>
       </div>
     </div>
 
+    <!-- TAB: ЛОГ -->
     <div class="tab-panel" id="tab-log">
-      <div class="log-list" id="log-list"></div>
+      <div id="log-list"></div>
     </div>
 
   </div>
 
-  <button class="fab fab-red" id="disc-fab" onclick="discBot()">🔴 Отключить бота</button>
+  <button class="fab fab-red" onclick="discBot()">🔴 Отключить бота</button>
 </div>
 
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand();
 tg.enableClosingConfirmation();
-tg.setHeaderColor('#0a0a0f');
-tg.setBackgroundColor('#0a0a0f');
-
-let userId = null, currentBotId = null, refreshTimer = null, isPremium = false;
+tg.setHeaderColor?.('#090910');
+tg.setBackgroundColor?.('#090910');
 
 const TABS = [
-  { id:'ctrl', label:'Управление' },
-  { id:'move', label:'Движение' },
-  { id:'pl',   label:'Игроки' },
-  { id:'chat', label:'Чат' },
-  { id:'log',  label:'Лог' },
+  { id:'ctrl',  label:'Управление' },
+  { id:'move',  label:'Движение' },
+  { id:'inv',   label:'Инвентарь' },
+  { id:'srv',   label:'Сервер' },
+  { id:'pl',    label:'Игроки' },
+  { id:'chat',  label:'Чат' },
+  { id:'log',   label:'Лог' },
 ];
 
-function buildTabs() {
-  const el = document.getElementById('tabs-el');
-  el.innerHTML = TABS.map((t,i) =>
-    `<button class="tab-btn${i===0?' active':''}" onclick="switchTab('${t.id}',this)">${t.label}</button>`
-  ).join('');
-}
+let currentBotId = null, currentBotRec = null, refreshTimer = null, isPremium = false;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function td() { return tg.initData || ('dev_' + (tg.initDataUnsafe?.user?.id || 0)); }
+function qs(id) { return document.getElementById(id); }
 
 function robotSvg(s) {
   return `<svg width="${s}" height="${s}" viewBox="0 0 40 40" fill="none">
@@ -383,83 +529,163 @@ function robotSvg(s) {
   </svg>`;
 }
 
-function td() { return tg.initData || ('dev_' + (tg.initDataUnsafe?.user?.id || 0)); }
+function fmtUp(ts) {
+  if (!ts) return '—';
+  const s = Math.max(0, Math.floor(Date.now()/1000)-ts);
+  return `${Math.floor(s/3600)}ч ${Math.floor((s%3600)/60)}м`;
+}
 
+let toastT;
+function toast(msg) {
+  const el = qs('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  qs(id).classList.add('active');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   buildTabs();
+
   const u = tg.initDataUnsafe?.user;
   if (u) {
-    userId = u.id;
-    document.getElementById('user-name').textContent = '@' + (u.username || u.first_name || 'user');
-    document.getElementById('user-fb').textContent = (u.first_name || '?')[0].toUpperCase();
+    qs('u-name').textContent = '@' + (u.username || u.first_name || 'user');
+    qs('u-fb').textContent = (u.first_name || '?')[0].toUpperCase();
     if (u.photo_url) {
-      const av = document.getElementById('user-av');
+      const av = qs('u-av');
       av.innerHTML = `<img src="${u.photo_url}" onerror="this.style.display='none'">`;
     }
   }
+
   await loadDash();
-  setTimeout(() => document.getElementById('loader').classList.add('out'), 500);
+  setTimeout(() => qs('loader').classList.add('out'), 450);
 }
 
+function buildTabs() {
+  qs('tabs-el').innerHTML = TABS.map((t,i) =>
+    `<button class="tab-btn${i===0?' active':''}" data-tab="${t.id}" onclick="switchTab('${t.id}',this)">${t.label}</button>`
+  ).join('');
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
 async function loadDash() {
   try {
     const r = await fetch('/api/status?tgData=' + encodeURIComponent(td()));
     const d = await r.json();
     if (!d.ok) return;
+
     const u = d.user;
     isPremium = u.premium_type !== 'free';
     const isEt = u.premium_type === 'eternal';
     const isMo = u.premium_type === 'monthly' && u.premium_expires > Date.now()/1000;
-    const badge = document.getElementById('plan-badge');
-    if (isEt) {
-      badge.className = 'plan-badge plan-eternal';
-      badge.innerHTML = '💎 Eternal';
-    } else if (isMo) {
+
+    const badge = qs('plan-badge');
+    if (isEt) { badge.className='plan-badge pe'; badge.innerHTML='💎 Eternal'; }
+    else if (isMo) {
       const exp = new Date(u.premium_expires*1000).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});
-      badge.className = 'plan-badge plan-monthly';
-      badge.innerHTML = `📅 Premium до ${exp}`;
-      document.getElementById('upgrade-btn').style.display = 'block';
-    } else {
-      badge.className = 'plan-badge plan-free';
-      badge.innerHTML = '🆓 Бесплатный · 72ч';
-    }
+      badge.className='plan-badge pm'; badge.innerHTML=`📅 Premium до ${exp}`;
+      qs('upg-btn').style.display='block';
+    } else { badge.className='plan-badge pf'; badge.innerHTML='🆓 Бесплатный · 72ч'; }
+
     renderBots(d.bots || []);
+    renderSaved(d.savedServers || []);
   } catch { renderBots([]); }
 }
 
 function renderBots(bots) {
-  const el = document.getElementById('bots-list');
+  const el = qs('bots-list');
   if (!bots.length) {
-    el.innerHTML = '<div class="empty-bots">Нет активных ботов<br>Нажми кнопку ниже, чтобы подключить 👇</div>';
+    el.innerHTML = '<div class="empty-state">Нет активных ботов<br>Нажми кнопку ниже 👇</div>';
     return;
   }
-  el.innerHTML = bots.map(b => {
-    const up = fmtUp(b.connected_at);
-    return `<div class="bot-item" onclick="openBot(${b.id})">
-      <div class="bot-avatar">${robotSvg(34)}</div>
+  el.innerHTML = bots.map(b => `
+    <div class="bot-card" onclick="openBot(${b.id})">
+      <div class="bot-av">${robotSvg(34)}</div>
       <div class="bot-info">
         <div class="bot-name">${b.mc_username}</div>
-        <div class="bot-server">${b.server_host}:${b.server_port}</div>
+        <div class="bot-srv">${b.server_host}:${b.server_port}</div>
         <div class="bot-tags">
-          <span class="tag tag-online"><span class="dot"></span>онлайн</span>
-          <span class="tag tag-ver">v${b.mc_version}</span>
-          <span class="tag tag-info">👥 ${b.players ?? '?'}</span>
-          <span class="tag tag-info">⏱ ${up}</span>
+          <span class="tag ton"><span class="dot"></span>онлайн</span>
+          <span class="tag tver">v${b.mc_version}</span>
+          <span class="tag tinf">👥 ${b.players??'?'}</span>
+          <span class="tag tinf">⏱ ${fmtUp(b.connected_at)}</span>
         </div>
       </div>
-      <div class="bot-arrow">›</div>
-    </div>`;
-  }).join('');
+      <div style="color:var(--muted);font-size:20px">›</div>
+    </div>`).join('');
 }
 
-function fmtUp(ts) {
-  if (!ts) return '—';
-  const s = Math.max(0, Math.floor(Date.now()/1000) - ts);
-  return `${Math.floor(s/3600)}ч ${Math.floor((s%3600)/60)}м`;
+function renderSaved(servers) {
+  const sec = qs('saved-section');
+  if (!servers.length) { sec.style.display='none'; return; }
+  sec.style.display='block';
+  qs('saved-list').innerHTML = servers.map(s => `
+    <div class="saved-row" onclick="connectSaved(${s.id})">
+      <div class="saved-icon">⭐</div>
+      <div class="saved-info">
+        <div class="saved-label">${s.label}</div>
+        <div class="saved-sub">${s.host}:${s.port} · v${s.version}</div>
+      </div>
+      <div class="saved-del" onclick="event.stopPropagation();deleteSaved(${s.id})">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2L12 12M12 2L2 12" stroke="#ff5252" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>`).join('');
 }
 
-async function openBot(id) {
-  currentBotId = id;
+async function deleteSaved(id) {
+  tg.showConfirm('Удалить из избранного?', async ok => {
+    if (!ok) return;
+    const r = await fetch('/api/saved-servers/' + id, {
+      method:'DELETE', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tgData: td() })
+    });
+    const d = await r.json();
+    if (d.ok) { renderSaved(d.servers); toast('🗑 Удалено'); }
+  });
+}
+
+async function connectSaved(id) {
+  // Close webapp and let tg bot handle connect with this server
+  tg.sendData(JSON.stringify({ action:'connect_saved', serverId: id }));
+}
+
+// ── SESSIONS ──────────────────────────────────────────────────────────────────
+async function openSessions() {
+  showScreen('s-sessions');
+  const el = qs('sessions-list');
+  el.innerHTML = '<div class="no-data">Загрузка...</div>';
+  try {
+    const r = await fetch('/api/sessions?tgData=' + encodeURIComponent(td()));
+    const d = await r.json();
+    if (!d.ok || !d.sessions.length) {
+      el.innerHTML = '<div class="no-data">Нет сохранённых сессий</div>';
+      return;
+    }
+    const reasonLabel = { manual:'Ручное', kicked:'Кикнут', disconnect:'Разрыв', error:'Ошибка' };
+    const reasonClass = { manual:'sr-manual', kicked:'sr-kicked', disconnect:'sr-disconnect', error:'sr-error' };
+    el.innerHTML = d.sessions.map(s => `
+      <div class="session-row">
+        <div class="session-top">
+          <div class="session-srv">${s.host}:${s.port}</div>
+          <div class="session-dur">${s.durationFmt}</div>
+        </div>
+        <div class="session-bot">
+          <div class="session-date">📅 ${s.connectedFmt}</div>
+          <span class="session-reason ${reasonClass[s.disconnect_reason]||'sr-manual'}">${reasonLabel[s.disconnect_reason]||s.disconnect_reason}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">🤖 ${s.bot_username} · v${s.version}</div>
+      </div>`).join('');
+  } catch { el.innerHTML = '<div class="no-data">Ошибка загрузки</div>'; }
+}
+
+// ── OPEN BOT ──────────────────────────────────────────────────────────────────
+async function openBot(botId) {
+  currentBotId = botId;
   showScreen('s-detail');
   await doRefresh();
   refreshTimer = setInterval(doRefresh, 10000);
@@ -467,97 +693,251 @@ async function openBot(id) {
 
 function goBack() {
   clearInterval(refreshTimer); refreshTimer = null;
-  currentBotId = null;
+  currentBotId = null; currentBotRec = null;
   showScreen('s-dash');
   loadDash();
 }
 
 async function doRefresh() {
   if (!currentBotId) return;
-  const ico = document.getElementById('refresh-ico');
-  ico.style.animation = 'spin .5s linear infinite';
+  const ico = qs('ref-ico');
+  ico.classList.add('spinning');
   try {
     const r = await fetch(`/api/bot/${currentBotId}?tgData=` + encodeURIComponent(td()));
     const d = await r.json();
     if (d.ok) renderDetail(d);
   } catch {}
-  ico.style.animation = '';
+  ico.classList.remove('spinning');
 }
 
 function renderDetail(d) {
   const s = d.stats, b = d.bot;
-  document.getElementById('hdr-name').textContent = b.mc_username;
-  document.getElementById('hdr-server').textContent = `${b.server_host}:${b.server_port}`;
-  document.getElementById('det-name').textContent = b.mc_username;
-  document.getElementById('det-sub').textContent = `${b.server_host}:${b.server_port} · v${b.mc_version}`;
-  document.getElementById('bot-av-hero').innerHTML = robotSvg(52);
+  currentBotRec = b;
 
-  const pill = document.getElementById('det-pill');
-  if (s) {
-    pill.className = 'status-pill';
-    pill.innerHTML = '<span class="dot"></span> онлайн';
-  } else {
-    pill.className = 'status-pill off';
-    pill.innerHTML = '🔴 оффлайн';
-  }
+  qs('hdr-name').textContent = b.mc_username;
+  qs('hdr-srv').textContent = `${b.server_host}:${b.server_port}`;
+  qs('det-name').textContent = b.mc_username;
+  qs('det-sub').textContent = `${b.server_host}:${b.server_port} · v${b.mc_version}`;
+  qs('det-av').innerHTML = robotSvg(52);
+  qs('op-cmd-txt').textContent = `/op ${b.mc_username}`;
+
+  const pill = qs('det-pill');
+  if (s) { pill.className='status-pill'; pill.innerHTML='<span class="dot"></span> онлайн'; }
+  else   { pill.className='status-pill off'; pill.innerHTML='🔴 оффлайн'; }
 
   if (s) {
-    setStat('st-hp', s.health, s.health >= 15 ? 'sv-green' : s.health >= 8 ? 'sv-yellow' : 'sv-red');
-    setStat('st-fd', s.food,   s.food >= 15 ? 'sv-green' : s.food >= 8 ? 'sv-yellow' : 'sv-red');
-    setStat('st-pl', s.onlineCount, 'sv-white');
-    setStat('st-up', `${s.uptimeH}ч ${s.uptimeM}м`, 'sv-white sv-sm');
-    setStat('st-wt', s.worldTime.replace(/[☀️🌙 ]/g,'').trim(), 'sv-white sv-sm');
-    setStat('st-gm', s.gamemode.slice(0,9), 'sv-white sv-sm');
-
-    document.getElementById('tog-afk').checked = !!s.antiAfkEnabled;
-    document.getElementById('tog-rec').checked = !!d.reconnect;
-    document.getElementById('tog-chat').checked = !!s.chatBridgeEnabled;
-
-    document.getElementById('op-cmd-txt').textContent = `/op ${b.mc_username}`;
-    if (s.opGranted) {
-      document.getElementById('op-granted').style.display = 'flex';
-      document.getElementById('op-btn').style.display = 'none';
-    } else {
-      document.getElementById('op-granted').style.display = 'none';
-      document.getElementById('op-btn').style.display = 'block';
-    }
+    renderHearts(s.health, s.food);
+    qs('st-pl').textContent = s.onlineCount ?? '—';
+    qs('st-up').textContent = `${s.uptimeH}ч ${s.uptimeM}м`;
+    qs('st-wt').textContent = (s.worldTime||'').replace(/[☀️🌙🌅]/u,'').trim();
+    qs('st-gm').textContent = (s.gamemode||'—').slice(0,9);
+    qs('st-pos').textContent = s.pos ? `X:${s.pos.x} Y:${s.pos.y} Z:${s.pos.z}` : '—';
+    qs('tog-afk').checked = !!s.antiAfkEnabled;
+    qs('tog-rec').checked = !!d.reconnect;
+    qs('tog-chat').checked = !!s.chatBridgeEnabled;
+    if (s.opGranted) { qs('op-granted').style.display='flex'; qs('op-btn').style.display='none'; }
+    else             { qs('op-granted').style.display='none';  qs('op-btn').style.display='block'; }
   }
 
   renderPlayers(d.players || []);
   renderLog(d.log || []);
 }
 
-function setStat(id, val, cls) {
-  const el = document.getElementById(id);
-  el.textContent = val ?? '—';
-  el.className = 'stat-val ' + cls;
+// ── HEARTS WIDGET ─────────────────────────────────────────────────────────────
+function renderHearts(hp, food) {
+  const TOTAL = 10;
+  hp   = Math.max(0, Math.min(20, Math.round(hp || 0)));
+  food = Math.max(0, Math.min(20, Math.round(food || 0)));
+
+  qs('hp-num').textContent  = `${hp}/20`;
+  qs('hp-food').textContent = `${food}/20`;
+
+  // Hearts
+  const hEl = qs('hearts-hp');
+  hEl.innerHTML = '';
+  for (let i = 0; i < TOTAL; i++) {
+    const val = hp - i*2;
+    const cls = val >= 2 ? 'full' : val === 1 ? 'half' : 'empty';
+    const h = document.createElement('div');
+    h.className = 'heart ' + cls;
+    h.textContent = val >= 2 ? '❤️' : val === 1 ? '🩷' : '🖤';
+    if (cls === 'full' && hp <= 4) h.classList.add('pulse');
+    hEl.appendChild(h);
+  }
+
+  // Food drums
+  const fEl = qs('hearts-food');
+  fEl.innerHTML = '';
+  for (let i = 0; i < TOTAL; i++) {
+    const val = food - i*2;
+    const d = document.createElement('div');
+    d.className = 'drum' + (val <= 0 ? ' empty' : '');
+    d.textContent = val >= 2 ? '🍗' : val === 1 ? '🥩' : '🍗';
+    fEl.appendChild(d);
+  }
 }
 
-function renderPlayers(pl) {
-  const el = document.getElementById('players-list');
-  el.innerHTML = pl.length
-    ? pl.map(p => `<div class="player-row"><span style="font-size:18px">🧑</span><span class="player-name">${p.name}</span><span class="player-ping">${p.ping ?? '?'}ms</span></div>`).join('')
-    : '<div class="no-data">Никого нет онлайн</div>';
+// ── SCREENSHOT ────────────────────────────────────────────────────────────────
+async function takeScreenshot() {
+  const btn = qs('ss-btn');
+  btn.classList.add('loading');
+  btn.textContent = '⏳ Генерирую...';
+  try {
+    const r = await fetch(`/api/bot/${currentBotId}/screenshot`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tgData: td() })
+    });
+    if (r.headers.get('content-type')?.includes('image')) {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      // Share or open in browser
+      const a = document.createElement('a');
+      a.href = url; a.download = `whminebot-${Date.now()}.png`; a.click();
+      toast('✅ Скриншот сохранён');
+    } else {
+      const d = await r.json();
+      if (d.error === 'canvas_unavailable') toast('❌ canvas недоступен на сервере');
+      else toast('❌ ' + (d.error || 'Ошибка'));
+    }
+  } catch { toast('❌ Ошибка'); }
+  btn.classList.remove('loading');
+  btn.textContent = '📷 Сделать скриншот-карточку';
 }
 
-function renderLog(log) {
-  const el = document.getElementById('log-list');
-  el.innerHTML = log.length
-    ? log.map(l => {
-        const c = l.includes('✅')||l.includes('👑') ? 'log-ok' : l.includes('⚠️')||l.includes('💀')||l.includes('⛔') ? 'log-err' : 'log-info';
-        return `<div class="log-entry ${c}">${l}</div>`;
-      }).join('')
-    : '<div class="no-data">Лог пустой</div>';
+// ── SAVE SERVER ───────────────────────────────────────────────────────────────
+async function saveCurrentServer() {
+  if (!currentBotRec) return;
+  const { server_host, server_port, mc_version } = currentBotRec;
+  try {
+    const r = await fetch('/api/saved-servers', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tgData: td(), label: server_host, host: server_host, port: server_port, version: mc_version })
+    });
+    const d = await r.json();
+    if (d.ok) toast('⭐ Сервер сохранён в избранное!');
+    else toast('❌ ' + (d.error || 'Уже сохранён'));
+  } catch { toast('❌ Ошибка'); }
 }
 
+// ── TABS ──────────────────────────────────────────────────────────────────────
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn?.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
+  qs('tab-' + name).classList.add('active');
   if (name === 'chat') loadChat();
+  if (name === 'inv')  loadInventory();
+  if (name === 'srv')  loadServerInfo();
 }
 
+// ── INVENTORY ─────────────────────────────────────────────────────────────────
+const ITEM_EMOJI = {
+  'Diamond Sword':'⚔️','Iron Sword':'🗡️','Golden Sword':'✨',
+  'Bow':'🏹','Arrow':'🏹','Shield':'🛡️',
+  'Diamond Pickaxe':'⛏️','Iron Pickaxe':'⛏️','Stone Pickaxe':'⛏️','Wooden Pickaxe':'⛏️',
+  'Diamond Axe':'🪓','Iron Axe':'🪓',
+  'Diamond Shovel':'🪣','Iron Shovel':'🪣',
+  'Diamond Helmet':'🪖','Iron Helmet':'🪖','Leather Helmet':'🪖','Golden Helmet':'🪖',
+  'Diamond Chestplate':'🥷','Iron Chestplate':'🥷','Leather Chestplate':'🥷',
+  'Diamond Leggings':'👖','Iron Leggings':'👖',
+  'Diamond Boots':'👢','Iron Boots':'👢','Leather Boots':'👢',
+  'Torch':'🔦','Lantern':'🏮',
+  'Apple':'🍎','Cooked Beef':'🥩','Bread':'🍞','Cooked Chicken':'🍗','Carrot':'🥕',
+  'Oak Log':'🪵','Birch Log':'🪵','Spruce Log':'🪵',
+  'Cobblestone':'🪨','Stone':'🪨','Dirt':'🟫','Sand':'🏜️','Gravel':'⬛',
+  'Diamond':'💎','Emerald':'💚','Gold Ingot':'🟡','Iron Ingot':'⬜',
+  'Coal':'⬛','Lapis Lazuli':'🔵','Redstone':'🔴',
+  'Book':'📖','Written Book':'📕','Compass':'🧭','Clock':'🕐','Map':'🗺️',
+  'Chest':'📦','Ender Chest':'📦','Barrel':'📦',
+  'Crafting Table':'🔨','Furnace':'🔥','Anvil':'⚒️',
+  'Water Bucket':'🪣','Lava Bucket':'🪣','Bucket':'🪣',
+  'Fishing Rod':'🎣','Flint and Steel':'🔥',
+};
+function itemEmoji(name) {
+  return ITEM_EMOJI[name] || '📦';
+}
+
+async function loadInventory() {
+  const el = qs('inv-content');
+  el.innerHTML = '<div class="no-data">Загрузка...</div>';
+  try {
+    const r = await fetch(`/api/bot/${currentBotId}/inventory?tgData=` + encodeURIComponent(td()));
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = '<div class="no-data">Нет данных</div>'; return; }
+
+    const armor  = d.items.filter(s => s.slot >= 5 && s.slot <= 8);
+    const hotbar = d.items.filter(s => s.slot >= 36 && s.slot <= 44);
+    const inv    = d.items.filter(s => s.slot >= 9 && s.slot <= 35 && s.item);
+
+    const slotHtml = (s, gridClass) => {
+      if (!s.item) return `<div class="inv-slot inv-empty-slot" title="${s.label}"></div>`;
+      const eq = (s.slot === d.equippedSlot + 36 || s.slot === d.equippedSlot) ? ' equipped' : '';
+      return `<div class="inv-slot has-item${eq}" title="${s.item.name}">
+        <div class="item-emoji">${itemEmoji(s.item.name)}</div>
+        <div class="item-name">${s.item.name.split(' ').pop()}</div>
+        ${s.item.count > 1 ? `<div class="item-count">${s.item.count}</div>` : ''}
+      </div>`;
+    };
+
+    el.innerHTML = `
+      <div class="inv-section-label">🪖 Броня</div>
+      <div class="inv-grid armor">${armor.map(s => slotHtml(s)).join('')}</div>
+      <div class="inv-section-label">🎯 Хотбар</div>
+      <div class="inv-grid">${hotbar.map(s => slotHtml(s)).join('')}</div>
+      ${inv.length ? `<div class="inv-section-label">🎒 Инвентарь (предметы)</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${inv.map(s => `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">${itemEmoji(s.item.name)}</span>
+          <span style="font-size:14px;font-weight:700;flex:1">${s.item.name}</span>
+          <span style="font-size:13px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace">×${s.item.count}</span>
+        </div>`).join('')}</div>` : ''}
+    `;
+  } catch { el.innerHTML = '<div class="no-data">Ошибка</div>'; }
+}
+
+// ── SERVER INFO / PING ────────────────────────────────────────────────────────
+async function loadServerInfo() {
+  const el = qs('srv-content');
+  el.innerHTML = '<div class="ping-loading">🔍 Пингую сервер...</div>';
+  if (!currentBotRec) return;
+  const { server_host, server_port } = currentBotRec;
+  try {
+    const r = await fetch(`/api/server-ping?host=${encodeURIComponent(server_host)}&port=${server_port}&tgData=${encodeURIComponent(td())}`);
+    const d = await r.json();
+    if (!d.ok) {
+      el.innerHTML = `<div class="ping-offline">🔴 Сервер недоступен<br><span style="font-size:12px;color:var(--muted)">${d.error||''}</span></div>`;
+      return;
+    }
+    const pingColor = d.ping < 50 ? '#00e676' : d.ping < 150 ? '#ffd740' : '#ff5252';
+    el.innerHTML = `
+      <div class="server-info-card">
+        <div class="server-motd">
+          ${d.favicon ? `<img class="server-favicon" src="${d.favicon}">` : ''}
+          <strong>${d.motd || 'Сервер Minecraft'}</strong>
+        </div>
+        <div class="server-stats-row">
+          <div class="server-stat">
+            <div class="server-stat-val">${d.online}</div>
+            <div class="server-stat-lbl">Онлайн</div>
+          </div>
+          <div class="server-stat">
+            <div class="server-stat-val">${d.max}</div>
+            <div class="server-stat-lbl">Макс</div>
+          </div>
+          <div class="server-stat">
+            <div class="server-stat-val" style="color:${pingColor}">${d.ping ?? '—'}ms</div>
+            <div class="server-stat-lbl">Пинг</div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--muted);font-weight:700">🏷 Версия: <span style="color:var(--text)">${d.version}</span></div>
+        </div>
+        ${d.players.length ? `<div class="server-pl-list">${d.players.map(p=>`<div class="server-pl-chip">🧑 ${p}</div>`).join('')}</div>` : ''}
+      </div>`;
+  } catch { el.innerHTML = '<div class="ping-offline">❌ Ошибка запроса</div>'; }
+}
+
+// ── TOGGLES ───────────────────────────────────────────────────────────────────
 async function toggleSetting(key) {
   try {
     const r = await fetch(`/api/bot/${currentBotId}/toggle`, {
@@ -566,12 +946,13 @@ async function toggleSetting(key) {
     });
     const d = await r.json();
     toast(d.message || '✅');
-    if (key==='afk') document.getElementById('tog-afk').checked = !!d.value;
-    if (key==='chat') document.getElementById('tog-chat').checked = !!d.value;
-    if (key==='reconnect') document.getElementById('tog-rec').checked = !!d.value;
+    if (key==='afk')       qs('tog-afk').checked = !!d.value;
+    if (key==='chat')      qs('tog-chat').checked = !!d.value;
+    if (key==='reconnect') qs('tog-rec').checked  = !!d.value;
   } catch { toast('❌ Ошибка'); }
 }
 
+// ── OP ────────────────────────────────────────────────────────────────────────
 async function grantOp() {
   try {
     await fetch(`/api/bot/${currentBotId}/op`, {
@@ -582,118 +963,86 @@ async function grantOp() {
     setTimeout(doRefresh, 1200);
   } catch { toast('❌ Ошибка'); }
 }
-
 function copyOpCmd() {
-  const t = document.getElementById('op-cmd-txt').textContent;
+  const t = qs('op-cmd-txt').textContent;
   navigator.clipboard?.writeText(t).then(() => toast('📋 Скопировано')).catch(() => toast('📋 ' + t));
 }
 
-// Movement
+// ── MOVEMENT ──────────────────────────────────────────────────────────────────
 function mv(dir) {
-  const idMap = { forward:'mv-f', back:'mv-b', left:'mv-l', right:'mv-r' };
-  if (idMap[dir]) document.getElementById(idMap[dir])?.classList.add('pr');
-  fetch(`/api/bot/${currentBotId}/move`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ dir, tgData: td() })
-  }).catch(()=>{});
+  const map={forward:'mv-f',back:'mv-b',left:'mv-l',right:'mv-r'};
+  if (map[dir]) qs(map[dir])?.classList.add('pr');
+  fetch(`/api/bot/${currentBotId}/move`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir,tgData:td()})}).catch(()=>{});
 }
-function mvStop() {
-  ['mv-f','mv-b','mv-l','mv-r'].forEach(id => document.getElementById(id)?.classList.remove('pr'));
-}
-function mvStopAll() {
-  mvStop();
-  fetch(`/api/bot/${currentBotId}/move`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ dir:'stop', tgData: td() })
-  }).catch(()=>{});
-  toast('⏹ Остановлен');
-}
+function mvStop() { ['mv-f','mv-b','mv-l','mv-r'].forEach(id=>qs(id)?.classList.remove('pr')); }
+function mvStopAll() { mvStop(); fetch(`/api/bot/${currentBotId}/move`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dir:'stop',tgData:td()})}).catch(()=>{}); toast('⏹ Остановлен'); }
 
 async function startFollow() {
-  const name = document.getElementById('follow-inp').value.trim();
-  if (!name) return;
+  const name = qs('follow-inp').value.trim(); if (!name) return;
   try {
-    await fetch(`/api/bot/${currentBotId}/follow`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ player: name, tgData: td() })
-    });
-    document.getElementById('follow-off').style.display = 'none';
-    document.getElementById('follow-on').style.display = 'block';
-    document.getElementById('follow-lbl').textContent = name;
+    await fetch(`/api/bot/${currentBotId}/follow`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player:name,tgData:td()})});
+    qs('follow-off').style.display='none'; qs('follow-on').style.display='block'; qs('follow-lbl').textContent=name;
     toast(`👤 Слежка: ${name}`);
   } catch { toast('❌ Ошибка'); }
 }
 async function stopFollow() {
-  await fetch(`/api/bot/${currentBotId}/follow/stop`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ tgData: td() })
-  }).catch(()=>{});
-  document.getElementById('follow-off').style.display = 'block';
-  document.getElementById('follow-on').style.display = 'none';
-  document.getElementById('follow-inp').value = '';
+  await fetch(`/api/bot/${currentBotId}/follow/stop`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tgData:td()})}).catch(()=>{});
+  qs('follow-off').style.display='block'; qs('follow-on').style.display='none'; qs('follow-inp').value='';
   toast('🛑 Слежка остановлена');
 }
 
+// ── PLAYERS ───────────────────────────────────────────────────────────────────
+function renderPlayers(pl) {
+  qs('players-list').innerHTML = pl.length
+    ? pl.map(p=>`<div class="pl-row"><span style="font-size:18px">🧑</span><span class="pl-name">${p.name}</span><span class="pl-ping">${p.ping??'?'}ms</span></div>`).join('')
+    : '<div class="no-data">Никого нет онлайн</div>';
+}
+
+// ── CHAT ──────────────────────────────────────────────────────────────────────
 async function loadChat() {
   try {
-    const r = await fetch(`/api/bot/${currentBotId}/chat?tgData=` + encodeURIComponent(td()));
+    const r = await fetch(`/api/bot/${currentBotId}/chat?tgData=`+encodeURIComponent(td()));
     const d = await r.json();
     if (d.ok) {
-      const el = document.getElementById('chat-msgs');
-      const msgs = d.messages || [];
-      el.innerHTML = msgs.length
-        ? msgs.map(m => `<div class="chat-msg"><div class="chat-msg-hdr"><span class="chat-msg-name">${m.name}</span><span class="chat-msg-time">${m.time}</span></div><div class="chat-msg-txt">${m.text}</div></div>`).join('')
+      const el = qs('chat-msgs');
+      el.innerHTML = d.messages.length
+        ? d.messages.map(m=>`<div class="chat-msg"><div class="chat-mhdr"><span class="chat-mname">${m.name}</span><span class="chat-mtime">${m.time}</span></div><div class="chat-mtxt">${m.text}</div></div>`).join('')
         : '<div class="no-data">Чат пуст</div>';
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop=el.scrollHeight;
     }
   } catch {}
 }
-
 async function sendChat() {
-  const inp = document.getElementById('chat-inp');
-  const msg = inp.value.trim();
-  if (!msg) return;
-  inp.value = '';
+  const inp=qs('chat-inp'), msg=inp.value.trim(); if (!msg) return; inp.value='';
   try {
-    await fetch(`/api/bot/${currentBotId}/chat`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ message: msg, tgData: td() })
-    });
-    toast('✅ Отправлено');
-    setTimeout(loadChat, 400);
+    await fetch(`/api/bot/${currentBotId}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,tgData:td()})});
+    toast('✅ Отправлено'); setTimeout(loadChat,400);
   } catch { toast('❌ Ошибка'); }
 }
 
+// ── LOG ───────────────────────────────────────────────────────────────────────
+function renderLog(log) {
+  qs('log-list').innerHTML = log.length
+    ? log.map(l=>{const c=l.includes('✅')||l.includes('👑')?'lok':l.includes('⚠️')||l.includes('💀')||l.includes('⛔')?'lerr':'linf';return`<div class="log-entry ${c}">${l}</div>`;}).join('')
+    : '<div class="no-data">Лог пустой</div>';
+}
+
+// ── DISCONNECT ────────────────────────────────────────────────────────────────
 async function discBot() {
-  tg.showConfirm('Отключить бота от сервера?', async (ok) => {
+  tg.showConfirm('Отключить бота от сервера?', async ok => {
     if (!ok) return;
     try {
-      await fetch(`/api/bot/${currentBotId}/disconnect`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ tgData: td() })
-      });
-      toast('✅ Бот отключён');
-      setTimeout(goBack, 700);
+      await fetch(`/api/bot/${currentBotId}/disconnect`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tgData:td()})});
+      toast('✅ Бот отключён'); setTimeout(goBack, 700);
     } catch { toast('❌ Ошибка'); }
   });
 }
 
+// ── CONNECT ───────────────────────────────────────────────────────────────────
 function connectClick() { tg.close(); }
 function upgradeClick() { tg.close(); }
 
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-
-let toastT;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastT);
-  toastT = setTimeout(() => el.classList.remove('show'), 2200);
-}
-
+// ── START ─────────────────────────────────────────────────────────────────────
 init();
 </script>
 </body>

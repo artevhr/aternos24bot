@@ -83,6 +83,28 @@ const ready = initSqlJs().then((SQL) => {
       last_used INTEGER DEFAULT (strftime('%s','now')),
       UNIQUE(telegram_id, nick)
     );
+    CREATE TABLE IF NOT EXISTS saved_servers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL DEFAULT 25565,
+      version TEXT NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s','now')),
+      UNIQUE(telegram_id, host, port)
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER NOT NULL,
+      bot_username TEXT NOT NULL,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      version TEXT NOT NULL,
+      connected_at INTEGER NOT NULL,
+      disconnected_at INTEGER,
+      duration_seconds INTEGER DEFAULT 0,
+      disconnect_reason TEXT DEFAULT 'manual'
+    );
     INSERT OR IGNORE INTO bot_counter VALUES (1, 0);
   `);
   // Seed default settings if not set
@@ -236,3 +258,37 @@ module.exports.touchAccount = (id) =>
 
 module.exports.getAccount = (id, tid) =>
   get('SELECT * FROM mc_accounts WHERE id = ? AND telegram_id = ?', [id, tid]);
+
+// ── SAVED SERVERS ──
+module.exports.getSavedServers = (tid) =>
+  all('SELECT * FROM saved_servers WHERE telegram_id = ? ORDER BY created_at DESC', [tid]);
+
+module.exports.addSavedServer = (tid, label, host, port, version) =>
+  run('INSERT OR REPLACE INTO saved_servers (telegram_id, label, host, port, version) VALUES (?, ?, ?, ?, ?)',
+    [tid, label, host, port, version]);
+
+module.exports.deleteSavedServer = (id, tid) =>
+  run('DELETE FROM saved_servers WHERE id = ? AND telegram_id = ?', [id, tid]);
+
+module.exports.getSavedServer = (id, tid) =>
+  get('SELECT * FROM saved_servers WHERE id = ? AND telegram_id = ?', [id, tid]);
+
+// ── SESSIONS ──
+module.exports.createSession = (tid, botUsername, host, port, version) => {
+  const now = Math.floor(Date.now() / 1000);
+  return run(
+    'INSERT INTO sessions (telegram_id, bot_username, host, port, version, connected_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [tid, botUsername, host, port, version, now]
+  ).lastInsertRowid;
+};
+
+module.exports.closeSession = (id, reason = 'manual') => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = get('SELECT connected_at FROM sessions WHERE id = ?', [id]);
+  const duration = s ? now - s.connected_at : 0;
+  run('UPDATE sessions SET disconnected_at = ?, duration_seconds = ?, disconnect_reason = ? WHERE id = ?',
+    [now, duration, reason, id]);
+};
+
+module.exports.getSessions = (tid, limit = 20) =>
+  all('SELECT * FROM sessions WHERE telegram_id = ? ORDER BY connected_at DESC LIMIT ?', [tid, limit]);
